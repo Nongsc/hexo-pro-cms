@@ -13,6 +13,12 @@ export const installTheme = (data: {
   name?: string;
 }) => http.request("post", "/theme/install", { data });
 
+export const installNpmTheme = (data: {
+  package: string;
+  name: string;
+  plugins?: string;
+}) => http.request("post", "/theme/install-npm", { data });
+
 export const getInstallStatus = (jobId: string) =>
   http.request("get", `/theme/install/status/${jobId}`);
 

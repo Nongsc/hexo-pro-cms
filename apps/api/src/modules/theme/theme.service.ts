@@ -7,6 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { GithubService } from '../../github/github.service';
 import { SettingsService } from '../settings/settings.service';
 import {
+  InstallNpmThemeDto,
   InstallThemeDto,
   SaveThemeConfigDto,
 } from './dto/theme.dto';
@@ -76,14 +77,9 @@ export class ThemeService {
     return { theme };
   }
 
-  async switchTheme(name: string) {
+  private async writeThemeField(name: string): Promise<string | undefined> {
     const file = await this.github.readFile('_config.yml');
     if (!file) throw new NotFoundException('_config.yml 不存在');
-
-    const entries = await this.github.listDir(`themes/${name}`);
-    if (!entries.length) {
-      throw new BadRequestException(`主题「${name}」不存在，请先安装`);
-    }
 
     let content = file.content;
     if (/^theme:\s*.*$/m.test(content)) {
@@ -99,13 +95,66 @@ export class ThemeService {
         note: `切换主题到 ${name}`,
       },
     });
-    const sha = await this.github.writeFile(
+    return this.github.writeFile(
       '_config.yml',
       content,
       `Switch theme: ${name}`,
       file.sha,
     );
+  }
+
+  async switchTheme(name: string) {
+    // 主题可能位于 themes/（git 克隆）或 node_modules（npm 安装），不做强校验
+    const sha = await this.writeThemeField(name);
     return { theme: name, sha };
+  }
+
+  /** npm 安装主题：改 package.json 加主题与插件、创建配置文件、切换 theme。 */
+  async installNpm(dto: InstallNpmThemeDto) {
+    const pkgName = dto.package.trim();
+    const themeName = dto.name.trim();
+    const plugins = (dto.plugins || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const file = await this.github.readFile('package.json');
+    if (!file) throw new NotFoundException('package.json 不存在');
+    let pkg: any;
+    try {
+      pkg = JSON.parse(file.content);
+    } catch {
+      throw new BadRequestException('package.json 解析失败');
+    }
+    if (!pkg.dependencies) pkg.dependencies = {};
+
+    const targets = [pkgName, ...plugins];
+    for (const p of targets) {
+      if (!pkg.dependencies[p]) pkg.dependencies[p] = 'latest';
+    }
+
+    const newContent = JSON.stringify(pkg, null, 2) + '\n';
+    await this.github.writeFile(
+      'package.json',
+      newContent,
+      `Add theme ${pkgName}`,
+      file.sha,
+    );
+
+    const configPath = `_config.${themeName}.yml`;
+    const existingConfig = await this.github.readFile(configPath);
+    if (!existingConfig) {
+      await this.github.writeFile(configPath, '', `Create ${configPath}`);
+    }
+
+    await this.writeThemeField(themeName);
+
+    return {
+      theme: themeName,
+      package: pkgName,
+      plugins,
+      configPath,
+    };
   }
 
   private deriveThemeName(repo: string): string {

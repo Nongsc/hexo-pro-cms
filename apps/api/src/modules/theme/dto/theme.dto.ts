@@ -16,6 +16,21 @@ export class InstallThemeDto {
   name?: string;
 }
 
+export class InstallNpmThemeDto {
+  @IsString()
+  @MaxLength(100)
+  package: string;
+
+  @IsString()
+  @MaxLength(100)
+  name: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  plugins?: string;
+}
+
 export class SwitchThemeDto {
   @IsString()
   @MaxLength(100)

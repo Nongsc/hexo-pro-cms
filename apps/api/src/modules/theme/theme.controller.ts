@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ThemeService } from './theme.service';
 import {
+  InstallNpmThemeDto,
   InstallThemeDto,
   SaveThemeConfigDto,
   SwitchThemeDto,
@@ -37,6 +38,11 @@ export class ThemeController {
   @Post('install')
   install(@Body() dto: InstallThemeDto) {
     return this.theme.install(dto);
+  }
+
+  @Post('install-npm')
+  installNpm(@Body() dto: InstallNpmThemeDto) {
+    return this.theme.installNpm(dto);
   }
 
   @Get('install/status/:runId')

@@ -7,6 +7,7 @@ import {
   getCurrentTheme,
   switchTheme,
   installTheme,
+  installNpmTheme,
   getInstallStatus,
   uninstallTheme,
   getThemeConfig,
@@ -26,8 +27,12 @@ const installStatusText = ref("");
 const installForm = reactive({
   url: "",
   branch: "",
-  name: ""
+  name: "",
+  package: "",
+  plugins: ""
 });
+
+const installMode = ref<"git" | "npm">("git");
 
 const configDialog = ref(false);
 const configTheme = ref("");
@@ -99,6 +104,10 @@ async function pollInstall(runId: number) {
 }
 
 async function onInstall() {
+  if (installMode.value === "npm") {
+    await onInstallNpm();
+    return;
+  }
   if (!installForm.url.trim()) {
     message("请输入主题仓库 URL", { type: "warning" });
     return;
@@ -130,6 +139,35 @@ async function onInstall() {
     installProgress.value = 0;
     installStatusText.value = "";
     message(e?.message || "安装失败", { type: "error" });
+  }
+}
+
+async function onInstallNpm() {
+  if (!installForm.package.trim() || !installForm.name.trim()) {
+    message("请输入 npm 包名和主题目录名", { type: "warning" });
+    return;
+  }
+  installing.value = true;
+  installStatusText.value = "写入 package.json 与配置…";
+  try {
+    const res: any = await installNpmTheme({
+      package: installForm.package.trim(),
+      name: installForm.name.trim(),
+      plugins: installForm.plugins || undefined
+    });
+    installForm.package = "";
+    installForm.name = "";
+    installForm.plugins = "";
+    message(
+      `已添加主题「${res.data?.theme}」，将在下次构建时通过 npm 安装生效`,
+      { type: "success" }
+    );
+    await load();
+  } catch (e: any) {
+    message(e?.message || "安装失败", { type: "error" });
+  } finally {
+    installing.value = false;
+    installStatusText.value = "";
   }
 }
 
@@ -222,18 +260,41 @@ onMounted(load);
         <el-card shadow="never">
           <template #header>安装新主题</template>
           <el-form :model="installForm" label-position="top">
-            <el-form-item label="GitHub 仓库 URL">
-              <el-input
-                v-model="installForm.url"
-                placeholder="https://github.com/theme-next/hexo-theme-next"
-              />
-            </el-form-item>
-            <el-form-item label="分支（默认 master）">
-              <el-input v-model="installForm.branch" placeholder="master / main" />
-            </el-form-item>
-            <el-form-item label="主题目录名（留空自动推断）">
-              <el-input v-model="installForm.name" placeholder="如 next" />
-            </el-form-item>
+            <el-radio-group v-model="installMode" class="mb-3">
+              <el-radio-button value="git">Git 克隆</el-radio-button>
+              <el-radio-button value="npm">npm 安装</el-radio-button>
+            </el-radio-group>
+
+            <template v-if="installMode === 'git'">
+              <el-form-item label="GitHub 仓库 URL">
+                <el-input
+                  v-model="installForm.url"
+                  placeholder="https://github.com/theme-next/hexo-theme-next"
+                />
+              </el-form-item>
+              <el-form-item label="分支（默认 master）">
+                <el-input v-model="installForm.branch" placeholder="master / main" />
+              </el-form-item>
+              <el-form-item label="主题目录名（留空自动推断）">
+                <el-input v-model="installForm.name" placeholder="如 next" />
+              </el-form-item>
+            </template>
+
+            <template v-else>
+              <el-form-item label="npm 包名">
+                <el-input v-model="installForm.package" placeholder="如 hexo-theme-yun" />
+              </el-form-item>
+              <el-form-item label="主题目录名">
+                <el-input v-model="installForm.name" placeholder="如 yun" />
+              </el-form-item>
+              <el-form-item label="额外插件（逗号分隔，可选）">
+                <el-input
+                  v-model="installForm.plugins"
+                  placeholder="如 hexo-renderer-inferno,hexo-word-counter"
+                />
+              </el-form-item>
+            </template>
+
             <el-form-item>
               <el-button
                 type="primary"
