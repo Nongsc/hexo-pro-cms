@@ -9,6 +9,9 @@ import {
   installTheme,
   installNpmTheme,
   getInstallStatus,
+  getPlugins,
+  addPlugins,
+  removePlugin,
   uninstallTheme,
   getThemeConfig,
   saveThemeConfig
@@ -23,6 +26,8 @@ const currentTheme = ref("");
 const themes = ref<any[]>([]);
 const installProgress = ref(0);
 const installStatusText = ref("");
+const plugins = ref<any[]>([]);
+const newPlugin = ref("");
 
 const installForm = reactive({
   url: "",
@@ -42,12 +47,14 @@ const configSaving = ref(false);
 async function load() {
   loading.value = true;
   try {
-    const [installed, current] = await Promise.all([
+    const [installed, current, pluginsRes] = await Promise.all([
       getInstalledThemes(),
-      getCurrentTheme()
+      getCurrentTheme(),
+      getPlugins()
     ]);
     themes.value = installed.data || [];
     currentTheme.value = current.data?.theme || "";
+    plugins.value = pluginsRes.data || [];
   } finally {
     loading.value = false;
   }
@@ -119,11 +126,13 @@ async function onInstall() {
     const res: any = await installTheme({
       url: installForm.url.trim(),
       branch: installForm.branch || undefined,
-      name: installForm.name || undefined
+      name: installForm.name || undefined,
+      plugins: installForm.plugins || undefined
     });
     installForm.url = "";
     installForm.branch = "";
     installForm.name = "";
+    installForm.plugins = "";
     if (res.data?.runId) {
       await pollInstall(res.data.runId);
     } else {
@@ -178,6 +187,28 @@ async function openConfig(name: string) {
   configDialog.value = true;
 }
 
+async function onAddPlugin() {
+  if (!newPlugin.value.trim()) {
+    message("请输入插件包名", { type: "warning" });
+    return;
+  }
+  await addPlugins(newPlugin.value.trim());
+  message("插件已添加，下次构建时 npm 安装生效", { type: "success" });
+  newPlugin.value = "";
+  await load();
+}
+
+async function onRemovePlugin(name: string) {
+  await ElMessageBox.confirm(
+    `确认移除插件「${name}」？会从 package.json 删除该依赖。`,
+    "移除插件",
+    { type: "warning", confirmButtonText: "移除", cancelButtonText: "取消" }
+  );
+  await removePlugin(name);
+  message("已移除", { type: "success" });
+  await load();
+}
+
 async function onUninstall(name: string) {
   await ElMessageBox.confirm(
     `确认卸载主题「${name}」？会从 themes/ 目录删除该主题代码。`,
@@ -222,7 +253,12 @@ onMounted(load);
             >
               <div class="flex items-center justify-between">
                 <div>
-                  <div class="font-medium">{{ t.name }}</div>
+                  <div class="font-medium flex items-center gap-1">
+                    {{ t.name }}
+                    <el-tag size="small" :type="t.mode === 'npm' ? 'warning' : 'info'">
+                      {{ t.mode === "npm" ? "npm" : "git" }}
+                    </el-tag>
+                  </div>
                   <div class="text-xs text-gray-400 mt-1">
                     {{ t.name === currentTheme ? "当前使用中" : "" }}
                   </div>
@@ -278,6 +314,12 @@ onMounted(load);
               <el-form-item label="主题目录名（留空自动推断）">
                 <el-input v-model="installForm.name" placeholder="如 next" />
               </el-form-item>
+              <el-form-item label="额外 npm 插件（逗号分隔，可选）">
+                <el-input
+                  v-model="installForm.plugins"
+                  placeholder="如 hexo-word-counter,hexo-generator-feed"
+                />
+              </el-form-item>
             </template>
 
             <template v-else>
@@ -324,6 +366,30 @@ onMounted(load);
         </el-card>
       </el-col>
     </el-row>
+
+    <el-card shadow="never" class="mt-4">
+      <template #header>插件管理（package.json 里的 hexo-* 依赖）</template>
+      <div class="flex items-center gap-2 mb-4 max-w-lg">
+        <el-input
+          v-model="newPlugin"
+          placeholder="输入插件包名，如 hexo-generator-feed"
+          @keyup.enter="onAddPlugin"
+        />
+        <el-button type="primary" @click="onAddPlugin">添加插件</el-button>
+      </div>
+      <el-empty v-if="!plugins.length" description="暂无插件" />
+      <div v-else class="flex flex-wrap gap-2">
+        <el-tag
+          v-for="p in plugins"
+          :key="p.name"
+          closable
+          type="info"
+          @close="onRemovePlugin(p.name)"
+        >
+          {{ p.name }}@{{ p.version }}
+        </el-tag>
+      </div>
+    </el-card>
 
     <el-dialog
       v-model="configDialog"

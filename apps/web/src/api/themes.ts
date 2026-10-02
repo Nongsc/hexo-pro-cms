@@ -11,6 +11,7 @@ export const installTheme = (data: {
   url: string;
   branch?: string;
   name?: string;
+  plugins?: string;
 }) => http.request("post", "/theme/install", { data });
 
 export const installNpmTheme = (data: {
@@ -18,6 +19,14 @@ export const installNpmTheme = (data: {
   name: string;
   plugins?: string;
 }) => http.request("post", "/theme/install-npm", { data });
+
+export const getPlugins = () => http.request("get", "/theme/plugins");
+
+export const addPlugins = (plugins: string) =>
+  http.request("post", "/theme/plugins", { data: { plugins } });
+
+export const removePlugin = (name: string) =>
+  http.request("delete", `/theme/plugins/${name}`);
 
 export const getInstallStatus = (jobId: string) =>
   http.request("get", `/theme/install/status/${jobId}`);

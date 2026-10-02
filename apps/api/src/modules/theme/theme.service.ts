@@ -7,6 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { GithubService } from '../../github/github.service';
 import { SettingsService } from '../settings/settings.service';
 import {
+  AddPluginsDto,
   InstallNpmThemeDto,
   InstallThemeDto,
   SaveThemeConfigDto,
@@ -14,7 +15,7 @@ import {
 
 const WORKFLOW_PATH = '.github/workflows/install-theme.yml';
 
-// 目标仓库里的主题安装工作流：clone 主题 → 拷到 themes/ → 提交推送。
+// 目标仓库里的主题安装工作流：clone 主题 → 加插件 → 提交推送。
 const INSTALL_THEME_WORKFLOW = `name: Install Theme
 on:
   workflow_dispatch:
@@ -27,6 +28,10 @@ on:
         required: true
       theme_branch:
         description: 'Theme branch (empty = default)'
+        required: false
+        default: ''
+      plugins:
+        description: 'Extra npm plugins (comma separated, optional)'
         required: false
         default: ''
 jobs:
@@ -45,6 +50,20 @@ jobs:
             git clone --depth 1 "\${{ github.event.inputs.theme_url }}" "themes/\${{ github.event.inputs.theme_name }}"
           fi
           rm -rf "themes/\${{ github.event.inputs.theme_name }}/.git"
+      - name: Add plugins to package.json
+        env:
+          PLUGINS: \${{ github.event.inputs.plugins }}
+        run: |
+          if [ -n "\$PLUGINS" ]; then
+            node <<'EOF'
+          const fs = require('fs');
+          const plugins = (process.env.PLUGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+          const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          p.dependencies = p.dependencies || {};
+          for (const x of plugins) p.dependencies[x] = p.dependencies[x] || 'latest';
+          fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\\n');
+          EOF
+          fi
       - name: Commit & push
         run: |
           git config user.name "github-actions[bot]"
@@ -62,11 +81,83 @@ export class ThemeService {
     private readonly settings: SettingsService,
   ) {}
 
+  private async getPackageJson(): Promise<any> {
+    const file = await this.github.readFile('package.json');
+    if (!file) throw new NotFoundException('package.json 不存在');
+    try {
+      return JSON.parse(file.content);
+    } catch {
+      throw new BadRequestException('package.json 解析失败');
+    }
+  }
+
+  private async savePackageJson(
+    pkg: any,
+    message: string,
+  ): Promise<string | undefined> {
+    const file = await this.github.readFile('package.json');
+    if (!file) throw new NotFoundException('package.json 不存在');
+    const content = JSON.stringify(pkg, null, 2) + '\n';
+    return this.github.writeFile('package.json', content, message, file.sha);
+  }
+
+  /** 已安装主题：themes/ 目录（git）+ package.json 里的 hexo-theme-*（npm）。 */
   async installed() {
-    const entries = await this.github.listDir('themes');
-    return entries
-      .filter((e) => e.type === 'dir')
-      .map((e) => ({ name: e.name, path: e.path }));
+    const map = new Map<string, { name: string; mode: string }>();
+
+    const gitEntries = await this.github.listDir('themes');
+    for (const e of gitEntries) {
+      if (e.type === 'dir') map.set(e.name, { name: e.name, mode: 'git' });
+    }
+
+    try {
+      const pkg = await this.getPackageJson();
+      for (const dep of Object.keys(pkg.dependencies || {})) {
+        if (dep.startsWith('hexo-theme-')) {
+          const name = dep.slice('hexo-theme-'.length);
+          if (!map.has(name)) map.set(name, { name, mode: 'npm' });
+        }
+      }
+    } catch {
+      /* package.json 不可读时忽略 */
+    }
+
+    return Array.from(map.values());
+  }
+
+  /** 已安装插件：package.json 里 hexo-* 依赖（不含 hexo-theme-*）。 */
+  async listPlugins() {
+    const pkg = await this.getPackageJson();
+    return Object.entries(pkg.dependencies || {})
+      .filter(
+        ([name]) => name.startsWith('hexo-') && !name.startsWith('hexo-theme-'),
+      )
+      .map(([name, version]) => ({ name, version }));
+  }
+
+  async addPlugins(dto: AddPluginsDto) {
+    const plugins = (dto.plugins || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (!plugins.length) throw new BadRequestException('请提供插件包名');
+
+    const pkg = await this.getPackageJson();
+    for (const p of plugins) {
+      if (!pkg.dependencies[p]) pkg.dependencies[p] = 'latest';
+    }
+    await this.savePackageJson(pkg, `Add plugins: ${plugins.join(', ')}`);
+    return { plugins };
+  }
+
+  async removePlugin(name: string) {
+    const pkg = await this.getPackageJson();
+    if (!pkg.dependencies?.[name]) {
+      throw new BadRequestException(`插件「${name}」不存在`);
+    }
+    delete pkg.dependencies[name];
+    await this.savePackageJson(pkg, `Remove plugin: ${name}`);
+    return { plugin: name };
   }
 
   async current() {
@@ -104,57 +195,8 @@ export class ThemeService {
   }
 
   async switchTheme(name: string) {
-    // 主题可能位于 themes/（git 克隆）或 node_modules（npm 安装），不做强校验
     const sha = await this.writeThemeField(name);
     return { theme: name, sha };
-  }
-
-  /** npm 安装主题：改 package.json 加主题与插件、创建配置文件、切换 theme。 */
-  async installNpm(dto: InstallNpmThemeDto) {
-    const pkgName = dto.package.trim();
-    const themeName = dto.name.trim();
-    const plugins = (dto.plugins || '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    const file = await this.github.readFile('package.json');
-    if (!file) throw new NotFoundException('package.json 不存在');
-    let pkg: any;
-    try {
-      pkg = JSON.parse(file.content);
-    } catch {
-      throw new BadRequestException('package.json 解析失败');
-    }
-    if (!pkg.dependencies) pkg.dependencies = {};
-
-    const targets = [pkgName, ...plugins];
-    for (const p of targets) {
-      if (!pkg.dependencies[p]) pkg.dependencies[p] = 'latest';
-    }
-
-    const newContent = JSON.stringify(pkg, null, 2) + '\n';
-    await this.github.writeFile(
-      'package.json',
-      newContent,
-      `Add theme ${pkgName}`,
-      file.sha,
-    );
-
-    const configPath = `_config.${themeName}.yml`;
-    const existingConfig = await this.github.readFile(configPath);
-    if (!existingConfig) {
-      await this.github.writeFile(configPath, '', `Create ${configPath}`);
-    }
-
-    await this.writeThemeField(themeName);
-
-    return {
-      theme: themeName,
-      package: pkgName,
-      plugins,
-      configPath,
-    };
   }
 
   private deriveThemeName(repo: string): string {
@@ -163,7 +205,6 @@ export class ThemeService {
     return name || repo;
   }
 
-  /** 确保目标仓库里存在主题安装工作流。 */
   private async ensureWorkflow() {
     const existing = await this.github.readFile(WORKFLOW_PATH);
     if (existing) return;
@@ -174,7 +215,7 @@ export class ThemeService {
     );
   }
 
-  /** 触发 GitHub Actions 安装主题，返回 workflow run 信息。 */
+  /** git 克隆方式安装主题（GitHub Actions 执行），可附带 npm 插件。 */
   async install(dto: InstallThemeDto) {
     const m = /github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/.exec(
       (dto.url || '').trim(),
@@ -184,13 +225,17 @@ export class ThemeService {
     const repo = m[2];
     const themeName = dto.name?.trim() || this.deriveThemeName(repo);
     const themeBranch = dto.branch?.trim() || '';
+    const plugins = (dto.plugins || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .join(',');
 
     await this.ensureWorkflow();
 
     const cfg = await this.settings.getGithubConfig();
     const branch = cfg.branch || 'master';
 
-    // 工作流刚创建时 GitHub 可能尚未注册，重试几次
     let dispatched = false;
     let lastErr: any = null;
     for (let i = 0; i < 3 && !dispatched; i++) {
@@ -199,6 +244,7 @@ export class ThemeService {
           theme_url: `https://github.com/${owner}/${repo}`,
           theme_name: themeName,
           theme_branch: themeBranch,
+          plugins,
         });
         dispatched = true;
       } catch (e) {
@@ -212,7 +258,6 @@ export class ThemeService {
       );
     }
 
-    // 找到刚触发的 run
     const runs = await this.github.listWorkflowRuns('install-theme.yml');
     const latest = runs[0];
 
@@ -220,20 +265,21 @@ export class ThemeService {
       theme: themeName,
       runId: latest?.id,
       runUrl: latest?.html_url || null,
+      plugins: dto.plugins ? (dto.plugins || '').split(',').map((s) => s.trim()).filter(Boolean) : [],
       message: '已触发 GitHub Actions 安装任务',
     };
   }
 
   async getInstallStatus(runId: number) {
     const run = await this.github.getWorkflowRun(runId);
-    const status = run.status; // queued | in_progress | completed
-    const conclusion = run.conclusion; // success | failure | ...
+    const status = run.status;
+    const conclusion = run.conclusion;
 
     let mappedStatus: string;
     let progress: number;
     if (status === 'completed') {
       mappedStatus = conclusion === 'success' ? 'completed' : 'failed';
-      progress = conclusion === 'success' ? 100 : 100;
+      progress = 100;
     } else if (status === 'in_progress') {
       mappedStatus = 'running';
       progress = 60;
@@ -251,7 +297,44 @@ export class ThemeService {
     };
   }
 
+  /** npm 安装主题：改 package.json 加主题包与插件、创建配置文件、切换 theme。 */
+  async installNpm(dto: InstallNpmThemeDto) {
+    const pkgName = dto.package.trim();
+    const themeName = dto.name.trim();
+    const plugins = (dto.plugins || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const pkg = await this.getPackageJson();
+    const targets = [pkgName, ...plugins];
+    for (const p of targets) {
+      if (!pkg.dependencies[p]) pkg.dependencies[p] = 'latest';
+    }
+    await this.savePackageJson(pkg, `Add theme ${pkgName}`);
+
+    const configPath = `_config.${themeName}.yml`;
+    const existingConfig = await this.github.readFile(configPath);
+    if (!existingConfig) {
+      await this.github.writeFile(configPath, '', `Create ${configPath}`);
+    }
+
+    await this.writeThemeField(themeName);
+
+    return {
+      theme: themeName,
+      package: pkgName,
+      plugins,
+      configPath,
+    };
+  }
+
+  /** 卸载主题：themes/<name>（git）或 hexo-theme-<name>（npm）。 */
   async uninstall(name: string) {
+    let removed = false;
+    const result: any = { theme: name };
+
+    // 1. git 模式
     const cfg = await this.settings.getGithubConfig();
     const branch = cfg.branch || 'master';
     const headSha = await this.github.getBranchHeadSha(branch);
@@ -260,28 +343,45 @@ export class ThemeService {
     const themesTreeSha = rootEntries.find(
       (e) => e.path === 'themes' && e.type === 'tree',
     )?.sha;
-    if (!themesTreeSha) throw new BadRequestException('themes 目录不存在');
 
-    const themesEntries = await this.github.getTree(themesTreeSha);
-    if (!themesEntries.some((e) => e.path === name)) {
-      throw new BadRequestException(`主题「${name}」不存在`);
+    if (themesTreeSha) {
+      const themesEntries = await this.github.getTree(themesTreeSha);
+      if (themesEntries.some((e) => e.path === name)) {
+        const remaining = themesEntries
+          .filter((e) => e.path !== name)
+          .map((e) => ({
+            path: e.path,
+            mode: e.mode,
+            type: e.type,
+            sha: e.sha,
+          }));
+        const newThemesSha = await this.github.createTree(undefined, remaining);
+        const newRootSha = await this.github.createTree(rootTreeSha, [
+          { path: 'themes', mode: '040000', type: 'tree', sha: newThemesSha },
+        ]);
+        const commitSha = await this.github.createCommit(
+          `Uninstall theme: ${name}`,
+          newRootSha,
+          headSha,
+        );
+        await this.github.updateBranchRef(branch, commitSha);
+        removed = true;
+        result.commit = commitSha;
+      }
     }
 
-    const remaining = themesEntries
-      .filter((e) => e.path !== name)
-      .map((e) => ({ path: e.path, mode: e.mode, type: e.type, sha: e.sha }));
+    // 2. npm 模式
+    const pkg = await this.getPackageJson();
+    const npmName = `hexo-theme-${name}`;
+    if (pkg.dependencies?.[npmName]) {
+      delete pkg.dependencies[npmName];
+      await this.savePackageJson(pkg, `Uninstall theme: ${name}`);
+      removed = true;
+      result.package = npmName;
+    }
 
-    const newThemesSha = await this.github.createTree(undefined, remaining);
-    const newRootSha = await this.github.createTree(rootTreeSha, [
-      { path: 'themes', mode: '040000', type: 'tree', sha: newThemesSha },
-    ]);
-    const commitSha = await this.github.createCommit(
-      `Uninstall theme: ${name}`,
-      newRootSha,
-      headSha,
-    );
-    await this.github.updateBranchRef(branch, commitSha);
-    return { theme: name, commit: commitSha };
+    if (!removed) throw new BadRequestException(`主题「${name}」不存在`);
+    return result;
   }
 
   async getConfig(name: string) {

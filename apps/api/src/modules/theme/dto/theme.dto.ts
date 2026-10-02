@@ -14,6 +14,11 @@ export class InstallThemeDto {
   @IsString()
   @MaxLength(100)
   name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  plugins?: string;
 }
 
 export class InstallNpmThemeDto {
@@ -29,6 +34,12 @@ export class InstallNpmThemeDto {
   @IsString()
   @MaxLength(500)
   plugins?: string;
+}
+
+export class AddPluginsDto {
+  @IsString()
+  @MaxLength(500)
+  plugins: string;
 }
 
 export class SwitchThemeDto {

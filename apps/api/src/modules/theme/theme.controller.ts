@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ThemeService } from './theme.service';
 import {
+  AddPluginsDto,
   InstallNpmThemeDto,
   InstallThemeDto,
   SaveThemeConfigDto,
@@ -28,6 +29,21 @@ export class ThemeController {
   @Get('current')
   current() {
     return this.theme.current();
+  }
+
+  @Get('plugins')
+  plugins() {
+    return this.theme.listPlugins();
+  }
+
+  @Post('plugins')
+  addPlugins(@Body() dto: AddPluginsDto) {
+    return this.theme.addPlugins(dto);
+  }
+
+  @Delete('plugins/:name')
+  removePlugin(@Param('name') name: string) {
+    return this.theme.removePlugin(name);
   }
 
   @Post('switch')
