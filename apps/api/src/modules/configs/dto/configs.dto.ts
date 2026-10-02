@@ -14,6 +14,12 @@ export class SaveConfigDto {
   note?: string;
 }
 
+export class PathDto {
+  @IsString()
+  @MaxLength(500)
+  path: string;
+}
+
 export class RollbackDto {
   @IsString()
   id: string;

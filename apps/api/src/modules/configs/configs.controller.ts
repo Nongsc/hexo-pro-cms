@@ -1,6 +1,13 @@
-import { Body, Controller, Get, Post, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ConfigsService } from './configs.service';
-import { RollbackDto, SaveConfigDto } from './dto/configs.dto';
+import { PathDto, RollbackDto, SaveConfigDto } from './dto/configs.dto';
 
 @Controller('configs')
 export class ConfigsController {
@@ -16,9 +23,19 @@ export class ConfigsController {
     return this.configs.getConfig(path);
   }
 
-  @Put('file')
-  saveFile(@Body() dto: SaveConfigDto) {
-    return this.configs.saveConfig(dto.path, dto.content, dto.note);
+  @Post('file/draft')
+  saveDraft(@Body() dto: SaveConfigDto) {
+    return this.configs.saveConfigDraft(dto.path, dto.content);
+  }
+
+  @Post('file/publish')
+  publish(@Body() dto: PathDto) {
+    return this.configs.publishConfigDraft(dto.path);
+  }
+
+  @Delete('file/draft')
+  discardDraft(@Query('path') path: string) {
+    return this.configs.discardConfigDraft(path);
   }
 
   @Get('snapshots')
