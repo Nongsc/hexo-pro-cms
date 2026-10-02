@@ -1,0 +1,44 @@
+# 放置于 Hexo 源仓库（CMS 连接的目标仓库）的 .github/workflows/deploy.yml
+# CMS 的「部署」模块通过 workflow_dispatch 触发此工作流来构建并发布静态站点。
+name: Deploy Hexo Site
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Generate static site
+        run: pnpm exec hexo generate
+
+      # 方式一：部署到 GitHub Pages
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
+
+      # 方式二（可选）：部署到 Vercel 等其他平台，取消注释并按需配置
+      # - name: Deploy to Vercel
+      #   run: npx vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} --yes

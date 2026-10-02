@@ -1,0 +1,166 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------------
+// Auth / users
+// ------------------------------------------------------------------
+
+model User {
+  id               String   @id @default(cuid())
+  username         String   @unique
+  passwordHash     String? // null => temporary user (skip-setup)
+  avatar           String   @default("")
+  isTemporary      Boolean  @default(false)
+  role             String   @default("admin")
+  securityQuestion String   @default("")
+  securityAnswer   String   @default("") // hashed
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  settings UserSetting?
+}
+
+model UserSetting {
+  id            String  @id @default(cuid())
+  userId        String  @unique
+  menuCollapsed Boolean @default(false)
+  editorMode    String  @default("ir") // "ir" | "wysiwyg" | "split"
+  locale        String  @default("zh")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ------------------------------------------------------------------
+// CMS content (source of truth). GitHub repo is the write-through
+// deployment channel, kept in sync via the Contents API.
+// ------------------------------------------------------------------
+
+model Post {
+  id          String    @id @default(cuid())
+  title       String
+  slug        String?
+  content     String    @default("") // markdown body, no front-matter
+  frontMatter Json? // parsed front-matter (date, tags, categories, cover, ...)
+  categories  String[]  @default([])
+  tags        String[]  @default([])
+  status      String    @default("draft") // draft | published | discarded
+  githubPath  String? // e.g. source/_posts/my-post.md
+  githubSha   String? // latest blob sha for optimistic update
+  permalink   String?
+  publishedAt DateTime?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status])
+  @@index([updatedAt])
+}
+
+model Page {
+  id          String    @id @default(cuid())
+  title       String
+  slug        String?
+  content     String    @default("")
+  frontMatter Json?
+  status      String    @default("draft") // draft | published | discarded
+  githubPath  String? // e.g. source/about/index.md
+  githubSha   String?
+  permalink   String?
+  publishedAt DateTime?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status])
+}
+
+// ------------------------------------------------------------------
+// Image host (Tencent COS metadata)
+// ------------------------------------------------------------------
+
+model Image {
+  id        String   @id @default(cuid())
+  key       String   @unique // COS object key
+  filename  String
+  url       String
+  size      Int?
+  mimeType  String?
+  folder    String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([folder])
+}
+
+// ------------------------------------------------------------------
+// Recycle bin / todos / deploy / config snapshots / yaml templates
+// ------------------------------------------------------------------
+
+model RecycleBin {
+  id         String   @id @default(cuid())
+  type       String // post | page | image
+  refId      String?
+  title      String
+  data       Json? // full record snapshot for restore
+  githubPath String?
+  githubSha  String?
+  deletedAt  DateTime @default(now())
+}
+
+model Todo {
+  id        String   @id @default(cuid())
+  content   String
+  done      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DeployStatus {
+  id             String    @id @default(cuid())
+  key            String    @unique @default("default")
+  isDeploying    Boolean   @default(false)
+  progress       Int       @default(0)
+  stage          String    @default("idle")
+  lastDeployTime DateTime?
+  runId          String?
+  runUrl         String?
+  logs           Json      @default("[]")
+  error          String?
+  updatedAt      DateTime  @updatedAt
+}
+
+model ConfigSnapshot {
+  id        String   @id @default(cuid())
+  scope     String // "site" | "theme:<name>" | "yaml:<path>"
+  content   String // YAML text snapshot
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([scope])
+}
+
+model YamlTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ------------------------------------------------------------------
+// Flexible system configuration (github / cos / deploy / system / storage)
+// ------------------------------------------------------------------
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

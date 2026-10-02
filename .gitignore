@@ -1,0 +1,39 @@
+# dependencies
+node_modules/
+.pnpm-store/
+.pnpm-cache/
+.pgtest/
+
+# build output
+dist/
+build/
+*.tsbuildinfo
+
+# env & secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+# 前端 VITE 构建配置（非机密）需要纳入版本库
+!apps/web/.env
+!apps/web/.env.development
+!apps/web/.env.production
+!apps/web/.env.staging
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# misc
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# reference clones (analysis only, not part of the app)
+_reference/
+
+# prisma generated client cache
+apps/api/src/generated/

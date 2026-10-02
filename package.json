@@ -1,0 +1,20 @@
+{
+  "name": "hexo-pro-cms",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Independent CMS for Hexo blogs — NestJS + Prisma(PostgreSQL) + pure-admin(Vue3), GitHub API + Tencent COS",
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev:web": "pnpm --filter @hexo-pro-cms/web dev",
+    "dev:api": "pnpm --filter @hexo-pro-cms/api start:dev",
+    "build": "pnpm -r build",
+    "build:web": "pnpm --filter @hexo-pro-cms/web build",
+    "build:api": "pnpm --filter @hexo-pro-cms/api build",
+    "start:api": "pnpm --filter @hexo-pro-cms/api start:prod",
+    "prisma:generate": "pnpm --filter @hexo-pro-cms/api prisma:generate",
+    "prisma:migrate": "pnpm --filter @hexo-pro-cms/api prisma:migrate"
+  }
+}

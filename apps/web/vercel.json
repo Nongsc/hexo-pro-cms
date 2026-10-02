@@ -1,0 +1,6 @@
+{
+  "version": 2,
+  "buildCommand": "cd ../.. && pnpm --filter @hexo-pro-cms/web build",
+  "outputDirectory": "dist",
+  "framework": "vite"
+}
