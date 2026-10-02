@@ -39,9 +39,9 @@ export class ThemeController {
     return this.theme.install(dto);
   }
 
-  @Get('install/status/:jobId')
-  installStatus(@Param('jobId') jobId: string) {
-    return this.theme.getInstallStatus(jobId);
+  @Get('install/status/:runId')
+  installStatus(@Param('runId') runId: string) {
+    return this.theme.getInstallStatus(parseInt(runId, 10));
   }
 
   @Delete(':name')

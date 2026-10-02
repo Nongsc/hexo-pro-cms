@@ -117,13 +117,19 @@ export class GithubService {
     }));
   }
 
-  async dispatchWorkflow(workflowId: string, ref: string): Promise<void> {
+  async dispatchWorkflow(
+    workflowId: string,
+    ref: string,
+    inputs?: Record<string, string>,
+  ): Promise<void> {
     const cfg = await this.auth();
     const url = `${this.apiBase}/repos/${cfg.owner}/${cfg.repo}/actions/workflows/${encodeURIComponent(workflowId)}/dispatches`;
+    const body: any = { ref };
+    if (inputs) body.inputs = inputs;
     const res = await fetch(url, {
       method: 'POST',
       headers: this.headers(cfg),
-      body: JSON.stringify({ ref }),
+      body: JSON.stringify(body),
     });
     if (res.status !== 204) await this.parse(res);
   }

@@ -71,28 +71,25 @@ async function onSwitch(name: string) {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const statusTextMap: Record<string, string> = {
-  pending: "排队中…",
-  fetching: "拉取主题文件…",
-  building: "重建文件…",
-  committing: "提交中…",
-  completed: "完成",
-  failed: "失败"
+  running: "GitHub Actions 安装中…",
+  completed: "安装完成",
+  failed: "安装失败"
 };
 
-async function pollInstall(jobId: string) {
+async function pollInstall(runId: number) {
   for (;;) {
-    await sleep(2500);
-    const s: any = await getInstallStatus(jobId);
+    await sleep(3000);
+    const s: any = await getInstallStatus(runId);
     const job = s.data || {};
     installProgress.value = job.progress || 0;
     installStatusText.value = statusTextMap[job.status] || job.status;
     if (job.status === "completed") {
-      message(`主题「${job.theme}」安装成功`, { type: "success" });
+      message("主题安装成功", { type: "success" });
       await load();
       break;
     }
     if (job.status === "failed") {
-      message(job.error || "安装失败", { type: "error" });
+      message("主题安装失败，请查看 GitHub Actions 运行详情", { type: "error" });
       break;
     }
   }
@@ -108,7 +105,7 @@ async function onInstall() {
   }
   installing.value = true;
   installProgress.value = 1;
-  installStatusText.value = "创建安装任务…";
+  installStatusText.value = "触发安装任务…";
   try {
     const res: any = await installTheme({
       url: installForm.url.trim(),
@@ -118,7 +115,16 @@ async function onInstall() {
     installForm.url = "";
     installForm.branch = "";
     installForm.name = "";
-    await pollInstall(res.data?.jobId);
+    if (res.data?.runId) {
+      await pollInstall(res.data.runId);
+    } else {
+      installing.value = false;
+      installProgress.value = 0;
+      installStatusText.value = "";
+      message("已触发安装，稍后刷新查看", { type: "success" });
+      await sleep(5000);
+      await load();
+    }
   } catch (e: any) {
     installing.value = false;
     installProgress.value = 0;
@@ -252,7 +258,7 @@ onMounted(load);
             type="info"
             :closable="false"
             title="安装原理"
-            description="后台异步安装：拉取主题仓库文件树，通过 GitHub git data API 一次性提交到 themes/ 目录（不会 npm install，如需额外依赖请用 GitHub Actions）。"
+            description="通过 GitHub Actions 安装：工作流在 CI 里 git clone 主题仓库并提交到 themes/ 目录（首次会自动在仓库创建 .github/workflows/install-theme.yml）。"
           />
         </el-card>
       </el-col>

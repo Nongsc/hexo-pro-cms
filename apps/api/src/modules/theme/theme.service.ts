@@ -3,7 +3,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GithubService } from '../../github/github.service';
 import { SettingsService } from '../settings/settings.service';
@@ -12,26 +11,50 @@ import {
   SaveThemeConfigDto,
 } from './dto/theme.dto';
 
-interface ThemeNode {
-  files: Map<string, string>; // name -> blob sha
-  dirs: Map<string, ThemeNode>;
-}
+const WORKFLOW_PATH = '.github/workflows/install-theme.yml';
 
-export interface InstallJob {
-  id: string;
-  status: 'pending' | 'fetching' | 'building' | 'committing' | 'completed' | 'failed';
-  progress: number;
-  theme: string;
-  commit?: string;
-  error?: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
+// 目标仓库里的主题安装工作流：clone 主题 → 拷到 themes/ → 提交推送。
+const INSTALL_THEME_WORKFLOW = `name: Install Theme
+on:
+  workflow_dispatch:
+    inputs:
+      theme_url:
+        description: 'Theme repo URL'
+        required: true
+      theme_name:
+        description: 'Theme directory name'
+        required: true
+      theme_branch:
+        description: 'Theme branch (empty = default)'
+        required: false
+        default: ''
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clone theme
+        run: |
+          rm -rf "themes/\${{ github.event.inputs.theme_name }}"
+          if [ -n "\${{ github.event.inputs.theme_branch }}" ]; then
+            git clone --depth 1 --branch "\${{ github.event.inputs.theme_branch }}" "\${{ github.event.inputs.theme_url }}" "themes/\${{ github.event.inputs.theme_name }}"
+          else
+            git clone --depth 1 "\${{ github.event.inputs.theme_url }}" "themes/\${{ github.event.inputs.theme_name }}"
+          fi
+          rm -rf "themes/\${{ github.event.inputs.theme_name }}/.git"
+      - name: Commit & push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Install theme: \${{ github.event.inputs.theme_name }}" || echo "no changes"
+          git push
+`;
 
 @Injectable()
 export class ThemeService {
-  private readonly jobs = new Map<string, InstallJob>();
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly github: GithubService,
@@ -91,46 +114,19 @@ export class ThemeService {
     return name || repo;
   }
 
-  private buildNode(files: { path: string; sha: string }[]): ThemeNode {
-    const root: ThemeNode = { files: new Map(), dirs: new Map() };
-    for (const f of files) {
-      const parts = f.path.split('/');
-      let cur = root;
-      for (let i = 0; i < parts.length; i++) {
-        const p = parts[i];
-        if (i === parts.length - 1) {
-          cur.files.set(p, f.sha);
-        } else {
-          if (!cur.dirs.has(p)) {
-            cur.dirs.set(p, { files: new Map(), dirs: new Map() });
-          }
-          cur = cur.dirs.get(p)!;
-        }
-      }
-    }
-    return root;
+  /** 确保目标仓库里存在主题安装工作流。 */
+  private async ensureWorkflow() {
+    const existing = await this.github.readFile(WORKFLOW_PATH);
+    if (existing) return;
+    await this.github.writeFile(
+      WORKFLOW_PATH,
+      INSTALL_THEME_WORKFLOW,
+      'Add theme install workflow',
+    );
   }
 
-  private async createNodeTree(node: ThemeNode): Promise<string> {
-    const entries: { path: string; mode: string; type: string; sha: string }[] =
-      [];
-    for (const [name, sha] of node.files) {
-      entries.push({ path: name, mode: '100644', type: 'blob', sha });
-    }
-    for (const [name, child] of node.dirs) {
-      const childSha = await this.createNodeTree(child);
-      entries.push({ path: name, mode: '040000', type: 'tree', sha: childSha });
-    }
-    return this.github.createTree(undefined, entries);
-  }
-
-  private updateJob(jobId: string, patch: Partial<InstallJob>) {
-    const job = this.jobs.get(jobId);
-    if (job) Object.assign(job, patch, { updatedAt: new Date() });
-  }
-
-  /** 立即返回 jobId，安装任务在后台执行。 */
-  install(dto: InstallThemeDto): { jobId: string; theme: string } {
+  /** 触发 GitHub Actions 安装主题，返回 workflow run 信息。 */
+  async install(dto: InstallThemeDto) {
     const m = /github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/.exec(
       (dto.url || '').trim(),
     );
@@ -138,117 +134,72 @@ export class ThemeService {
     const owner = m[1];
     const repo = m[2];
     const themeName = dto.name?.trim() || this.deriveThemeName(repo);
-    const branch = dto.branch?.trim() || undefined;
+    const themeBranch = dto.branch?.trim() || '';
 
-    const jobId = randomUUID();
-    this.jobs.set(jobId, {
-      id: jobId,
-      status: 'pending',
-      progress: 0,
-      theme: themeName,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    await this.ensureWorkflow();
 
-    void this.runInstall(jobId, owner, repo, themeName, branch);
-    return { jobId, theme: themeName };
-  }
+    const cfg = await this.settings.getGithubConfig();
+    const branch = cfg.branch || 'master';
 
-  getInstallStatus(jobId: string): InstallJob {
-    const job = this.jobs.get(jobId);
-    if (!job) throw new NotFoundException('安装任务不存在');
-    return job;
-  }
-
-  private async runInstall(
-    jobId: string,
-    owner: string,
-    repo: string,
-    themeName: string,
-    branch: string | undefined,
-  ) {
-    try {
-      // 1. 解析默认分支 + 拉取文件树
-      this.updateJob(jobId, { status: 'fetching', progress: 3 });
-      let ref = branch;
-      if (!ref) {
-        try {
-          ref = await this.github.getRemoteDefaultBranch(owner, repo);
-        } catch {
-          ref = 'master';
-        }
-      }
-      const tree = await this.github.getRemoteTreeRecursive(owner, repo, ref);
-      const blobEntries = tree.filter((e) => e.type === 'blob');
-      if (!blobEntries.length) {
-        throw new BadRequestException('主题仓库内容为空');
-      }
-
-      // 2. 并发拉取内容 + 在目标仓库重建 blob（最耗时）
-      this.updateJob(jobId, { status: 'building', progress: 8 });
-      const total = blobEntries.length;
-      const CONCURRENCY = 30;
-      const rebuilt: { path: string; sha: string }[] = [];
-      let done = 0;
-      for (let i = 0; i < total; i += CONCURRENCY) {
-        const chunk = blobEntries.slice(i, i + CONCURRENCY);
-        const results = await Promise.all(
-          chunk.map(async (b) => {
-            const content = await this.github.getRemoteBlobContent(
-              owner,
-              repo,
-              b.sha,
-            );
-            const sha = await this.github.createBlob(content);
-            return { path: b.path, sha };
-          }),
-        );
-        rebuilt.push(...results);
-        done += chunk.length;
-        this.updateJob(jobId, {
-          progress: 8 + Math.round((done / total) * 77),
+    // 工作流刚创建时 GitHub 可能尚未注册，重试几次
+    let dispatched = false;
+    let lastErr: any = null;
+    for (let i = 0; i < 3 && !dispatched; i++) {
+      try {
+        await this.github.dispatchWorkflow('install-theme.yml', branch, {
+          theme_url: `https://github.com/${owner}/${repo}`,
+          theme_name: themeName,
+          theme_branch: themeBranch,
         });
+        dispatched = true;
+      } catch (e) {
+        lastErr = e;
+        await new Promise((r) => setTimeout(r, 2000));
       }
-
-      // 3. 构建主题子树
-      this.updateJob(jobId, { status: 'building', progress: 88 });
-      const themeTreeSha = await this.createNodeTree(this.buildNode(rebuilt));
-
-      // 4. 提交 + 更新分支
-      this.updateJob(jobId, { status: 'committing', progress: 95 });
-      const cfg = await this.settings.getGithubConfig();
-      const targetBranch = cfg.branch || 'master';
-      const headSha = await this.github.getBranchHeadSha(targetBranch);
-      const rootTreeSha = await this.github.getCommitTreeSha(headSha);
-      const rootEntries = await this.github.getTree(rootTreeSha);
-      const themesTreeSha = rootEntries.find(
-        (e) => e.path === 'themes' && e.type === 'tree',
-      )?.sha;
-
-      const newThemesSha = await this.github.createTree(themesTreeSha, [
-        { path: themeName, mode: '040000', type: 'tree', sha: themeTreeSha },
-      ]);
-      const newRootSha = await this.github.createTree(rootTreeSha, [
-        { path: 'themes', mode: '040000', type: 'tree', sha: newThemesSha },
-      ]);
-      const commitSha = await this.github.createCommit(
-        `Install theme: ${themeName} (${owner}/${repo})`,
-        newRootSha,
-        headSha,
-      );
-      await this.github.updateBranchRef(targetBranch, commitSha);
-
-      this.updateJob(jobId, {
-        status: 'completed',
-        progress: 100,
-        commit: commitSha,
-      });
-    } catch (err: any) {
-      this.updateJob(jobId, {
-        status: 'failed',
-        error: err?.message || '安装失败',
-      });
     }
+    if (!dispatched) {
+      throw new BadRequestException(
+        `触发安装工作流失败：${lastErr?.message || lastErr}`,
+      );
+    }
+
+    // 找到刚触发的 run
+    const runs = await this.github.listWorkflowRuns('install-theme.yml');
+    const latest = runs[0];
+
+    return {
+      theme: themeName,
+      runId: latest?.id,
+      runUrl: latest?.html_url || null,
+      message: '已触发 GitHub Actions 安装任务',
+    };
+  }
+
+  async getInstallStatus(runId: number) {
+    const run = await this.github.getWorkflowRun(runId);
+    const status = run.status; // queued | in_progress | completed
+    const conclusion = run.conclusion; // success | failure | ...
+
+    let mappedStatus: string;
+    let progress: number;
+    if (status === 'completed') {
+      mappedStatus = conclusion === 'success' ? 'completed' : 'failed';
+      progress = conclusion === 'success' ? 100 : 100;
+    } else if (status === 'in_progress') {
+      mappedStatus = 'running';
+      progress = 60;
+    } else {
+      mappedStatus = 'running';
+      progress = 10;
+    }
+
+    return {
+      status: mappedStatus,
+      progress,
+      conclusion,
+      runUrl: run.html_url,
+      runId,
+    };
   }
 
   async uninstall(name: string) {
