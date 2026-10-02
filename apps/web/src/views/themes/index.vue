@@ -7,6 +7,7 @@ import {
   getCurrentTheme,
   switchTheme,
   installTheme,
+  getInstallStatus,
   uninstallTheme,
   getThemeConfig,
   saveThemeConfig
@@ -19,6 +20,8 @@ const installing = ref(false);
 const switching = ref<string>("");
 const currentTheme = ref("");
 const themes = ref<any[]>([]);
+const installProgress = ref(0);
+const installStatusText = ref("");
 
 const installForm = reactive({
   url: "",
@@ -65,25 +68,62 @@ async function onSwitch(name: string) {
   }
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+const statusTextMap: Record<string, string> = {
+  pending: "排队中…",
+  fetching: "拉取主题文件…",
+  building: "重建文件…",
+  committing: "提交中…",
+  completed: "完成",
+  failed: "失败"
+};
+
+async function pollInstall(jobId: string) {
+  for (;;) {
+    await sleep(2500);
+    const s: any = await getInstallStatus(jobId);
+    const job = s.data || {};
+    installProgress.value = job.progress || 0;
+    installStatusText.value = statusTextMap[job.status] || job.status;
+    if (job.status === "completed") {
+      message(`主题「${job.theme}」安装成功`, { type: "success" });
+      await load();
+      break;
+    }
+    if (job.status === "failed") {
+      message(job.error || "安装失败", { type: "error" });
+      break;
+    }
+  }
+  installing.value = false;
+  installProgress.value = 0;
+  installStatusText.value = "";
+}
+
 async function onInstall() {
   if (!installForm.url.trim()) {
     message("请输入主题仓库 URL", { type: "warning" });
     return;
   }
   installing.value = true;
+  installProgress.value = 1;
+  installStatusText.value = "创建安装任务…";
   try {
     const res: any = await installTheme({
       url: installForm.url.trim(),
       branch: installForm.branch || undefined,
       name: installForm.name || undefined
     });
-    message(`主题「${res.data?.theme}」安装成功`, { type: "success" });
     installForm.url = "";
     installForm.branch = "";
     installForm.name = "";
-    await load();
-  } finally {
+    await pollInstall(res.data?.jobId);
+  } catch (e: any) {
     installing.value = false;
+    installProgress.value = 0;
+    installStatusText.value = "";
+    message(e?.message || "安装失败", { type: "error" });
   }
 }
 
@@ -198,12 +238,21 @@ onMounted(load);
                 安装主题
               </el-button>
             </el-form-item>
+            <div v-if="installing" class="mb-4">
+              <div class="text-sm text-gray-500 mb-2">{{ installStatusText }}</div>
+              <el-progress
+                :percentage="installProgress"
+                :stroke-width="10"
+                striped
+                striped-flow
+              />
+            </div>
           </el-form>
           <el-alert
             type="info"
             :closable="false"
             title="安装原理"
-            description="下载主题仓库 tarball，通过 GitHub git data API 一次性提交到 themes/ 目录（不会 npm install，如需额外依赖请用 GitHub Actions）。"
+            description="后台异步安装：拉取主题仓库文件树，通过 GitHub git data API 一次性提交到 themes/ 目录（不会 npm install，如需额外依赖请用 GitHub Actions）。"
           />
         </el-card>
       </el-col>
