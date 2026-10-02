@@ -143,7 +143,7 @@ export class ThemeService {
     }
 
     const rebuilt: { path: string; sha: string }[] = [];
-    const CONCURRENCY = 10;
+    const CONCURRENCY = 30;
     for (let i = 0; i < blobEntries.length; i += CONCURRENCY) {
       const chunk = blobEntries.slice(i, i + CONCURRENCY);
       const results = await Promise.all(

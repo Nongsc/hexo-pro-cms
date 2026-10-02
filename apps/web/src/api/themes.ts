@@ -11,7 +11,7 @@ export const installTheme = (data: {
   url: string;
   branch?: string;
   name?: string;
-}) => http.request("post", "/theme/install", { data });
+}) => http.request("post", "/theme/install", { data }, { timeout: 600000 });
 
 export const uninstallTheme = (name: string) =>
   http.request("delete", `/theme/${name}`);
