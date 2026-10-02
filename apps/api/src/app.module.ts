@@ -15,6 +15,7 @@ import { PagesModule } from './modules/pages/pages.module';
 import { PostsModule } from './modules/posts/posts.module';
 import { RecycleModule } from './modules/recycle/recycle.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { ThemeModule } from './modules/theme/theme.module';
 import { UsersModule } from './modules/users/users.module';
 import { PrismaModule } from './prisma/prisma.module';
 
@@ -25,6 +26,7 @@ import { PrismaModule } from './prisma/prisma.module';
     GithubModule,
     CosModule,
     SettingsModule,
+    ThemeModule,
     AuthModule,
     UsersModule,
     PostsModule,

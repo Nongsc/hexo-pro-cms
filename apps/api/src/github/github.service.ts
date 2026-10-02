@@ -158,4 +158,142 @@ export class GithubService {
       name: data.name,
     };
   }
+
+  // ---- git data API（用于主题安装等整树提交） ---------------------
+
+  async getBranchHeadSha(branch: string): Promise<string> {
+    const cfg = await this.auth();
+    const url = `${this.apiBase}/repos/${cfg.owner}/${cfg.repo}/git/ref/heads/${encodeURIComponent(branch)}`;
+    const res = await fetch(url, { headers: this.headers(cfg) });
+    const data = await this.parse(res);
+    return data.object.sha;
+  }
+
+  async getCommitTreeSha(commitSha: string): Promise<string> {
+    const cfg = await this.auth();
+    const url = `${this.apiBase}/repos/${cfg.owner}/${cfg.repo}/git/commits/${commitSha}`;
+    const res = await fetch(url, { headers: this.headers(cfg) });
+    const data = await this.parse(res);
+    return data.tree.sha;
+  }
+
+  async getTree(
+    treeSha: string,
+  ): Promise<{ path: string; mode: string; type: string; sha: string }[]> {
+    const cfg = await this.auth();
+    const url = `${this.apiBase}/repos/${cfg.owner}/${cfg.repo}/git/trees/${treeSha}`;
+    const res = await fetch(url, { headers: this.headers(cfg) });
+    const data = await this.parse(res);
+    return (data.tree || []).map((e: any) => ({
+      path: e.path,
+      mode: e.mode,
+      type: e.type,
+      sha: e.sha,
+    }));
+  }
+
+  async createBlob(content: Buffer): Promise<string> {
+    const cfg = await this.auth();
+    const url = `${this.apiBase}/repos/${cfg.owner}/${cfg.repo}/git/blobs`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: this.headers(cfg),
+      body: JSON.stringify({
+        content: content.toString('base64'),
+        encoding: 'base64',
+      }),
+    });
+    const data = await this.parse(res);
+    return data.sha;
+  }
+
+  async createTree(
+    baseTreeSha: string | undefined,
+    entries: { path: string; mode: string; type: string; sha: string }[],
+  ): Promise<string> {
+    const cfg = await this.auth();
+    const url = `${this.apiBase}/repos/${cfg.owner}/${cfg.repo}/git/trees`;
+    const body: any = { tree: entries };
+    if (baseTreeSha) body.base_tree = baseTreeSha;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: this.headers(cfg),
+      body: JSON.stringify(body),
+    });
+    const data = await this.parse(res);
+    return data.sha;
+  }
+
+  async createCommit(
+    message: string,
+    treeSha: string,
+    parentSha: string,
+  ): Promise<string> {
+    const cfg = await this.auth();
+    const url = `${this.apiBase}/repos/${cfg.owner}/${cfg.repo}/git/commits`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: this.headers(cfg),
+      body: JSON.stringify({ message, tree: treeSha, parents: [parentSha] }),
+    });
+    const data = await this.parse(res);
+    return data.sha;
+  }
+
+  async updateBranchRef(branch: string, sha: string): Promise<void> {
+    const cfg = await this.auth();
+    const url = `${this.apiBase}/repos/${cfg.owner}/${cfg.repo}/git/refs/heads/${encodeURIComponent(branch)}`;
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: this.headers(cfg),
+      body: JSON.stringify({ sha, force: false }),
+    });
+    await this.parse(res);
+  }
+
+  async downloadTarball(url: string): Promise<Buffer> {
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new BadRequestException(`下载失败 (HTTP ${res.status})`);
+    }
+    return Buffer.from(await res.arrayBuffer());
+  }
+
+  // ---- 远程仓库（主题源）的只读访问，使用同一 token -----------------
+
+  async getRemoteDefaultBranch(owner: string, repo: string): Promise<string> {
+    const cfg = await this.auth();
+    const url = `${this.apiBase}/repos/${owner}/${repo}`;
+    const res = await fetch(url, { headers: this.headers(cfg) });
+    const data = await this.parse(res);
+    return data.default_branch;
+  }
+
+  async getRemoteTreeRecursive(
+    owner: string,
+    repo: string,
+    ref: string,
+  ): Promise<{ path: string; type: string; sha: string }[]> {
+    const cfg = await this.auth();
+    const url = `${this.apiBase}/repos/${owner}/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`;
+    const res = await fetch(url, { headers: this.headers(cfg) });
+    const data = await this.parse(res);
+    return (data.tree || []).map((e: any) => ({
+      path: e.path,
+      type: e.type,
+      sha: e.sha,
+    }));
+  }
+
+  async getRemoteBlobContent(
+    owner: string,
+    repo: string,
+    sha: string,
+  ): Promise<Buffer> {
+    const cfg = await this.auth();
+    const url = `${this.apiBase}/repos/${owner}/${repo}/git/blobs/${sha}`;
+    const res = await fetch(url, { headers: this.headers(cfg) });
+    const data = await this.parse(res);
+    return Buffer.from(data.content, 'base64');
+  }
 }

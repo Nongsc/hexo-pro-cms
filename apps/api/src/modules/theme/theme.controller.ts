@@ -1,0 +1,56 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
+import { ThemeService } from './theme.service';
+import {
+  InstallThemeDto,
+  SaveThemeConfigDto,
+  SwitchThemeDto,
+} from './dto/theme.dto';
+
+@Controller('theme')
+export class ThemeController {
+  constructor(private readonly theme: ThemeService) {}
+
+  @Get('installed')
+  installed() {
+    return this.theme.installed();
+  }
+
+  @Get('current')
+  current() {
+    return this.theme.current();
+  }
+
+  @Post('switch')
+  switchTheme(@Body() dto: SwitchThemeDto) {
+    return this.theme.switchTheme(dto.name);
+  }
+
+  @Post('install')
+  install(@Body() dto: InstallThemeDto) {
+    return this.theme.install(dto);
+  }
+
+  @Delete(':name')
+  uninstall(@Param('name') name: string) {
+    return this.theme.uninstall(name);
+  }
+
+  @Get('config')
+  getConfig(@Query('name') name: string) {
+    return this.theme.getConfig(name);
+  }
+
+  @Put('config')
+  saveConfig(@Body() dto: SaveThemeConfigDto) {
+    return this.theme.saveConfig(dto);
+  }
+}

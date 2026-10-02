@@ -44,6 +44,7 @@
 | 页面管理 | 增删改查、发布状态、从 GitHub 同步 | `pages` |
 | 图床 | COS 上传/列表/删除/重命名/移动/未引用清理、粘贴上传 | `images` |
 | 配置管理 | `_config*.yml` 可视化编辑、快照与回滚 | `configs` |
+| 主题管理 | 列出/一键切换/从 GitHub 仓库安装/卸载主题、编辑主题配置 | `theme` |
 | 部署 | 配置 GitHub Actions 工作流、触发部署、状态轮询 | `deploy` |
 | 系统设置 | 站点信息、GitHub 连接、COS 配置、用户资料 | `settings`/`users` |
 | 回收站 | 文章/页面恢复、彻底删除、清空 | `recycle` |
@@ -145,6 +146,7 @@ CMS 连接的 Hexo 源仓库按标准 Hexo 目录结构读写：
 - 页面：`GET/POST /pages`、`GET/PUT/DELETE /pages/:id`、`POST /pages/sync`
 - 图床：`GET/PUT /images/config`、`GET /images`、`POST /images/upload`、`DELETE /images/:id`、`POST /images/delete/batch`、`/images/move`、`/images/:id/rename`、`/images/unused`
 - 配置：`GET /configs/files`、`GET/PUT /configs/file`、`GET /configs/snapshots`、`POST /configs/rollback`
+- 主题：`GET /theme/installed`、`GET /theme/current`、`POST /theme/switch`、`POST /theme/install`、`DELETE /theme/:name`、`GET/PUT /theme/config`
 - 部署：`GET/PUT /deploy/config`、`POST /deploy/execute`、`GET /deploy/status`
 - 仪表盘：`/dashboard/stats`、`/dashboard/recent`、`/dashboard/system`、`/dashboard/todos*`
 - 回收站：`GET /recycle`、`POST /recycle/:id/restore`、`DELETE /recycle/:id`、`POST /recycle/empty`
