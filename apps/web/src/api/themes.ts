@@ -37,5 +37,11 @@ export const uninstallTheme = (name: string) =>
 export const getThemeConfig = (name: string) =>
   http.request("get", "/theme/config", { params: { name } });
 
-export const saveThemeConfig = (name: string, content: string) =>
-  http.request("put", "/theme/config", { data: { name, content } });
+export const saveThemeConfigDraft = (name: string, content: string) =>
+  http.request("post", "/theme/config/draft", { data: { name, content } });
+
+export const publishThemeConfig = (name: string) =>
+  http.request("post", "/theme/config/publish", { data: { name } });
+
+export const discardThemeConfigDraft = (name: string) =>
+  http.request("delete", "/theme/config/draft", { params: { name } });

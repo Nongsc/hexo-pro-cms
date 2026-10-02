@@ -146,7 +146,7 @@ CMS 连接的 Hexo 源仓库按标准 Hexo 目录结构读写：
 - 页面：`GET/POST /pages`、`GET/PUT/DELETE /pages/:id`、`POST /pages/sync`
 - 图床：`GET/PUT /images/config`、`GET /images`、`POST /images/upload`、`DELETE /images/:id`、`POST /images/delete/batch`、`/images/move`、`/images/:id/rename`、`/images/unused`
 - 配置：`GET /configs/files`、`GET/PUT /configs/file`、`GET /configs/snapshots`、`POST /configs/rollback`
-- 主题：`GET /theme/installed`、`GET /theme/current`、`POST /theme/switch`、`POST /theme/install`（git 克隆，GitHub Actions 执行）、`POST /theme/install-npm`（npm 安装，改 package.json + 插件）、`GET /theme/install/status/:runId`、`DELETE /theme/:name`、`GET/PUT /theme/config`
+- 主题：`GET /theme/installed`、`GET /theme/current`、`POST /theme/switch`、`POST /theme/install`（git 克隆，GitHub Actions 执行）、`POST /theme/install-npm`（npm 安装）、`GET /theme/install/status/:runId`、`DELETE /theme/:name`（卸载并删除配置文件/草稿/快照）、`GET /theme/plugins` + `POST /theme/plugins` + `DELETE /theme/plugins/:name`、`GET /theme/config` + `POST /theme/config/draft` + `POST /theme/config/publish` + `DELETE /theme/config/draft`
 - 部署：`GET/PUT /deploy/config`、`POST /deploy/execute`、`GET /deploy/status`
 - 仪表盘：`/dashboard/stats`、`/dashboard/recent`、`/dashboard/system`、`/dashboard/todos*`
 - 回收站：`GET /recycle`、`POST /recycle/:id/restore`、`DELETE /recycle/:id`、`POST /recycle/empty`

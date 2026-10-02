@@ -10,7 +10,6 @@ import {
   AddPluginsDto,
   InstallNpmThemeDto,
   InstallThemeDto,
-  SaveThemeConfigDto,
 } from './dto/theme.dto';
 
 const WORKFLOW_PATH = '.github/workflows/install-theme.yml';
@@ -50,6 +49,11 @@ jobs:
             git clone --depth 1 "\${{ github.event.inputs.theme_url }}" "themes/\${{ github.event.inputs.theme_name }}"
           fi
           rm -rf "themes/\${{ github.event.inputs.theme_name }}/.git"
+      - name: Create config file
+        run: |
+          if [ ! -f "_config.\${{ github.event.inputs.theme_name }}.yml" ]; then
+            touch "_config.\${{ github.event.inputs.theme_name }}.yml"
+          fi
       - name: Add plugins to package.json
         env:
           PLUGINS: \${{ github.event.inputs.plugins }}
@@ -99,6 +103,33 @@ export class ThemeService {
     if (!file) throw new NotFoundException('package.json 不存在');
     const content = JSON.stringify(pkg, null, 2) + '\n';
     return this.github.writeFile('package.json', content, message, file.sha);
+  }
+
+  // ---- 配置草稿（先存数据库，确认后再推 GitHub） -----------------
+
+  private draftKey(name: string): string {
+    return `configDraft:theme:${name}`;
+  }
+
+  private async getDraft(name: string): Promise<string | null> {
+    const row = await this.prisma.systemSetting.findUnique({
+      where: { key: this.draftKey(name) },
+    });
+    return (row?.value as any)?.content ?? null;
+  }
+
+  private async saveDraft(name: string, content: string): Promise<void> {
+    await this.prisma.systemSetting.upsert({
+      where: { key: this.draftKey(name) },
+      create: { key: this.draftKey(name), value: { content } as any },
+      update: { value: { content } as any },
+    });
+  }
+
+  private async deleteDraft(name: string): Promise<void> {
+    await this.prisma.systemSetting.deleteMany({
+      where: { key: this.draftKey(name) },
+    });
   }
 
   /** 已安装主题：themes/ 目录（git）+ package.json 里的 hexo-theme-*（npm）。 */
@@ -381,34 +412,74 @@ export class ThemeService {
     }
 
     if (!removed) throw new BadRequestException(`主题「${name}」不存在`);
+
+    // 3. 删除主题配置文件（GitHub）+ 草稿与快照（数据库）
+    const configPath = `_config.${name}.yml`;
+    const configFile = await this.github.readFile(configPath);
+    if (configFile) {
+      await this.github.deleteFile(
+        configPath,
+        `Delete ${configPath}`,
+        configFile.sha,
+      );
+      result.configDeleted = true;
+    }
+    await this.deleteDraft(name);
+    await this.prisma.configSnapshot.deleteMany({
+      where: { scope: `file:${configPath}` },
+    });
+
     return result;
   }
 
   async getConfig(name: string) {
     const path = `_config.${name}.yml`;
     const file = await this.github.readFile(path);
-    if (!file) throw new NotFoundException(`主题配置文件不存在: ${path}`);
-    return { path, content: file.content, sha: file.sha };
+    const draft = await this.getDraft(name);
+    return {
+      path,
+      content: file?.content ?? '',
+      sha: file?.sha ?? null,
+      draft,
+      hasDraft: draft !== null,
+    };
   }
 
-  async saveConfig(dto: SaveThemeConfigDto) {
-    const path = `_config.${dto.name}.yml`;
+  /** 保存配置草稿到数据库（不推 GitHub）。 */
+  async saveConfigDraft(name: string, content: string) {
+    await this.saveDraft(name, content);
+    return { name, draft: true };
+  }
+
+  /** 把草稿发布到 GitHub（自动快照后写文件，再清草稿）。 */
+  async publishConfigDraft(name: string) {
+    const draft = await this.getDraft(name);
+    if (draft === null) throw new BadRequestException('没有待发布的草稿');
+
+    const path = `_config.${name}.yml`;
     const existing = await this.github.readFile(path);
     if (existing) {
       await this.prisma.configSnapshot.create({
         data: {
           scope: `file:${path}`,
           content: existing.content,
-          note: dto.note || '保存前自动快照',
+          note: '发布草稿前自动快照',
         },
       });
     }
     const sha = await this.github.writeFile(
       path,
-      dto.content,
-      `Update theme config: ${dto.name}`,
+      draft,
+      `Update theme config: ${name}`,
       existing?.sha,
     );
-    return { path, sha };
+    await this.deleteDraft(name);
+    return { path, sha, published: true };
+  }
+
+  /** 丢弃未发布的草稿。 */
+  async discardConfigDraft(name: string) {
+    await this.deleteDraft(name);
+    return { name, discarded: true };
   }
 }

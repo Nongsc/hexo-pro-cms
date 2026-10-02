@@ -14,7 +14,9 @@ import {
   removePlugin,
   uninstallTheme,
   getThemeConfig,
-  saveThemeConfig
+  saveThemeConfigDraft,
+  publishThemeConfig,
+  discardThemeConfigDraft
 } from "@/api/themes";
 
 defineOptions({ name: "ThemesIndex" });
@@ -43,6 +45,8 @@ const configDialog = ref(false);
 const configTheme = ref("");
 const configContent = ref("");
 const configSaving = ref(false);
+const configPublishing = ref(false);
+const configHasDraft = ref(false);
 
 async function load() {
   loading.value = true;
@@ -183,7 +187,10 @@ async function onInstallNpm() {
 async function openConfig(name: string) {
   configTheme.value = name;
   const res: any = await getThemeConfig(name);
-  configContent.value = res.data?.content || "";
+  const d = res.data || {};
+  // 有未发布草稿时优先展示草稿
+  configContent.value = d.hasDraft ? d.draft ?? "" : d.content ?? "";
+  configHasDraft.value = !!d.hasDraft;
   configDialog.value = true;
 }
 
@@ -220,15 +227,40 @@ async function onUninstall(name: string) {
   await load();
 }
 
-async function onSaveConfig() {
+async function onSaveDraft() {
   configSaving.value = true;
   try {
-    await saveThemeConfig(configTheme.value, configContent.value);
-    message("主题配置已保存", { type: "success" });
-    configDialog.value = false;
+    await saveThemeConfigDraft(configTheme.value, configContent.value);
+    configHasDraft.value = true;
+    message("草稿已保存到数据库（尚未推送到 GitHub）", { type: "success" });
   } finally {
     configSaving.value = false;
   }
+}
+
+async function onPublish() {
+  configPublishing.value = true;
+  try {
+    await publishThemeConfig(configTheme.value);
+    configHasDraft.value = false;
+    message("配置已发布到 GitHub", { type: "success" });
+    configDialog.value = false;
+  } finally {
+    configPublishing.value = false;
+  }
+}
+
+async function onDiscardDraft() {
+  await ElMessageBox.confirm("确认丢弃未发布的草稿？", "丢弃草稿", {
+    type: "warning",
+    confirmButtonText: "丢弃",
+    cancelButtonText: "取消"
+  });
+  await discardThemeConfigDraft(configTheme.value);
+  configHasDraft.value = false;
+  const res: any = await getThemeConfig(configTheme.value);
+  configContent.value = res.data?.content || "";
+  message("草稿已丢弃", { type: "success" });
 }
 
 onMounted(load);
@@ -396,6 +428,14 @@ onMounted(load);
       :title="`主题配置 - _config.${configTheme}.yml`"
       width="720px"
     >
+      <el-alert
+        v-if="configHasDraft"
+        type="warning"
+        :closable="false"
+        class="mb-3"
+        title="存在未发布的草稿"
+        description="当前编辑的是数据库里的草稿，尚未推送到 GitHub。"
+      />
       <el-input
         v-model="configContent"
         type="textarea"
@@ -404,9 +444,19 @@ onMounted(load);
         placeholder="YAML 配置内容"
       />
       <template #footer>
-        <el-button @click="configDialog = false">取消</el-button>
-        <el-button type="primary" :loading="configSaving" @click="onSaveConfig">
-          保存
+        <el-button v-if="configHasDraft" @click="onDiscardDraft">
+          丢弃草稿
+        </el-button>
+        <el-button @click="configDialog = false">关闭</el-button>
+        <el-button :loading="configSaving" @click="onSaveDraft">
+          保存草稿
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="configPublishing"
+          @click="onPublish"
+        >
+          发布到 GitHub
         </el-button>
       </template>
     </el-dialog>

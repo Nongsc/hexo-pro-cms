@@ -5,7 +5,6 @@ import {
   Get,
   Param,
   Post,
-  Put,
   Query,
 } from '@nestjs/common';
 import { ThemeService } from './theme.service';
@@ -76,8 +75,18 @@ export class ThemeController {
     return this.theme.getConfig(name);
   }
 
-  @Put('config')
-  saveConfig(@Body() dto: SaveThemeConfigDto) {
-    return this.theme.saveConfig(dto);
+  @Post('config/draft')
+  saveConfigDraft(@Body() dto: SaveThemeConfigDto) {
+    return this.theme.saveConfigDraft(dto.name, dto.content);
+  }
+
+  @Post('config/publish')
+  publishConfigDraft(@Body() dto: SwitchThemeDto) {
+    return this.theme.publishConfigDraft(dto.name);
+  }
+
+  @Delete('config/draft')
+  discardConfigDraft(@Query('name') name: string) {
+    return this.theme.discardConfigDraft(name);
   }
 }
