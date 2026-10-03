@@ -26,11 +26,86 @@ const form = reactive({
   slug: "",
   categories: [] as string[],
   tags: [] as string[],
+  date: "",
+  cover: "",
+  description: "",
   content: "",
   status: "draft" as string
 });
 
 const frontmatterYaml = ref("");
+
+// ---- YAML 标量字段的简单同步（避免引入 yaml 依赖） ----
+
+function escapeYamlValue(v: string): string {
+  if (/^\s|\s$/.test(v) || /:\s|#|[\n\r]/.test(v) || /^['"]/.test(v)) {
+    return JSON.stringify(v);
+  }
+  return v;
+}
+
+function getYamlScalar(yaml: string, key: string): string {
+  const lines = yaml.split("\n");
+  for (const line of lines) {
+    const m = new RegExp(`^${key}\\s*:\\s*(.*)$`).exec(line);
+    if (m) {
+      let val = m[1].trim();
+      if (/^".*"$/.test(val)) {
+        try {
+          val = JSON.parse(val);
+        } catch {
+          val = val.slice(1, -1);
+        }
+      } else if (/^'.*'$/.test(val)) {
+        val = val.slice(1, -1);
+      }
+      return val;
+    }
+  }
+  return "";
+}
+
+function setYamlScalar(yaml: string, key: string, value: string | undefined): string {
+  const lines = yaml.split("\n");
+  const idx = lines.findIndex((l) => new RegExp(`^${key}\\s*:`).test(l));
+  if (value) {
+    const line = `${key}: ${escapeYamlValue(value)}`;
+    if (idx >= 0) lines[idx] = line;
+    else lines.push(line);
+  } else if (idx >= 0) {
+    lines.splice(idx, 1);
+  }
+  return lines.join("\n");
+}
+
+let syncing = false;
+
+function formToYaml() {
+  if (syncing) return;
+  syncing = true;
+  try {
+    let y = frontmatterYaml.value;
+    y = setYamlScalar(y, "date", form.date || undefined);
+    y = setYamlScalar(y, "cover", form.cover || undefined);
+    y = setYamlScalar(y, "description", form.description || undefined);
+    frontmatterYaml.value = y;
+  } finally {
+    syncing = false;
+  }
+}
+
+function yamlToForm() {
+  if (syncing) return;
+  syncing = true;
+  try {
+    const y = frontmatterYaml.value;
+    form.date = getYamlScalar(y, "date");
+    form.cover = getYamlScalar(y, "cover");
+    form.description = getYamlScalar(y, "description");
+  } finally {
+    syncing = false;
+  }
+}
 
 function nowDateTime() {
   const d = new Date();
@@ -69,6 +144,10 @@ async function load() {
     form.content = p.content || "";
     form.status = p.status || "draft";
     frontmatterYaml.value = p.frontMatterYaml || "";
+    const fm = p.frontMatter || {};
+    form.date = fm.date || "";
+    form.cover = fm.cover || "";
+    form.description = fm.description || "";
   } finally {
     loading.value = false;
   }
@@ -92,6 +171,8 @@ async function save() {
   }
   saving.value = true;
   try {
+    // 保存前让表单字段回写到 YAML，保证一致
+    formToYaml();
     const payload = {
       title: form.title,
       slug: form.slug,
@@ -202,11 +283,45 @@ onMounted(async () => {
           </el-col>
         </el-row>
 
-        <el-form-item label="状态">
-          <el-radio-group v-model="form.status">
-            <el-radio value="draft">草稿</el-radio>
-            <el-radio value="published">发布</el-radio>
-          </el-radio-group>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="发布日期">
+              <el-date-picker
+                v-model="form.date"
+                type="datetime"
+                placeholder="选择日期时间"
+                value-format="YYYY-MM-DD HH:mm:ss"
+                class="w-full"
+                @change="formToYaml"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="状态">
+              <el-radio-group v-model="form.status">
+                <el-radio value="draft">草稿</el-radio>
+                <el-radio value="published">发布</el-radio>
+              </el-radio-group>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-form-item label="封面图">
+          <el-input
+            v-model="form.cover"
+            placeholder="封面图片 URL（可从图床复制）"
+            @input="formToYaml"
+          />
+        </el-form-item>
+
+        <el-form-item label="摘要">
+          <el-input
+            v-model="form.description"
+            type="textarea"
+            :rows="2"
+            placeholder="文章摘要/描述（可选）"
+            @input="formToYaml"
+          />
         </el-form-item>
 
         <el-form-item label="Front-matter">
@@ -214,11 +329,12 @@ onMounted(async () => {
             v-model="frontmatterYaml"
             type="textarea"
             :rows="6"
-            placeholder="YAML 格式，如 date / cover / description / comments 等"
+            placeholder="YAML 格式，可添加任意字段"
             class="font-mono"
+            @input="yamlToForm"
           />
           <div class="text-xs text-gray-400 mt-1">
-            Front-matter（YAML），会写入 .md 文件顶部；title / tags / categories 已由上方字段自动写入。
+            与上方「发布日期 / 封面图 / 摘要」双向同步；title / tags / categories 由上方字段自动写入。
           </div>
         </el-form-item>
 
