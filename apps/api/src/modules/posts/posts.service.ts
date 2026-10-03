@@ -8,10 +8,12 @@ import { GithubService } from '../../github/github.service';
 import {
   dateParts,
   formatDateTime,
+  frontMatterToYaml,
   normalizeList,
   parseMarkdown,
   serializeMarkdown,
   slugify,
+  yamlToFrontMatter,
 } from '../../common/utils/markdown.util';
 import { SavePostDto } from './dto/posts.dto';
 
@@ -54,6 +56,17 @@ export class PostsService {
     const { title: _t, tags: _tg, categories: _c, ...rest } = extra || {};
     const date = rest.date || existingDate || formatDateTime(new Date());
     return { ...rest, date };
+  }
+
+  /** 优先使用 frontMatterYaml（原始 YAML），否则用 frontMatter JSON。 */
+  private resolveFrontMatter(
+    dto: SavePostDto,
+    fallback?: Record<string, any>,
+  ): Record<string, any> | undefined {
+    if (dto.frontMatterYaml !== undefined) {
+      return yamlToFrontMatter(dto.frontMatterYaml);
+    }
+    return dto.frontMatter !== undefined ? dto.frontMatter : fallback;
   }
 
   private computePermalink(frontMatter: Record<string, any>, slug: string) {
@@ -147,7 +160,10 @@ export class PostsService {
   async get(id: string) {
     const post = await this.prisma.post.findUnique({ where: { id } });
     if (!post) throw new NotFoundException('文章不存在');
-    return post;
+    return {
+      ...post,
+      frontMatterYaml: frontMatterToYaml(post.frontMatter as any),
+    };
   }
 
   async checkTitle(title: string, excludeId?: string) {
@@ -233,7 +249,7 @@ export class PostsService {
     const status = dto.status === 'published' ? 'published' : 'draft';
     const categories = normalizeList(dto.categories);
     const tags = normalizeList(dto.tags);
-    const storedFm = this.buildStoredFrontMatter(dto.frontMatter);
+    const storedFm = this.buildStoredFrontMatter(this.resolveFrontMatter(dto));
     const fullFm = { ...storedFm, title: dto.title, tags, categories };
     const permalink = this.computePermalink(fullFm, slug);
     const githubPath = this.githubPathFor(slug, status);
@@ -274,7 +290,7 @@ export class PostsService {
     const tags = dto.tags !== undefined ? normalizeList(dto.tags) : post.tags;
     const existingDate = (post.frontMatter as any)?.date;
     const storedFm = this.buildStoredFrontMatter(
-      dto.frontMatter !== undefined ? dto.frontMatter : (post.frontMatter as any),
+      this.resolveFrontMatter(dto, post.frontMatter as any),
       existingDate,
     );
     const fullFm = { ...storedFm, title, tags, categories };

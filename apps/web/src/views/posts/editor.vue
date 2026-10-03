@@ -26,12 +26,20 @@ const form = reactive({
   slug: "",
   categories: [] as string[],
   tags: [] as string[],
-  date: "",
-  cover: "",
-  description: "",
   content: "",
   status: "draft" as string
 });
+
+const frontmatterYaml = ref("");
+
+function nowDateTime() {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
+    `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+  );
+}
 
 async function loadMeta() {
   const [cats, tags] = await Promise.all([
@@ -60,10 +68,7 @@ async function load() {
     form.tags = p.tags || [];
     form.content = p.content || "";
     form.status = p.status || "draft";
-    const fm = p.frontMatter || {};
-    form.date = fm.date || "";
-    form.cover = fm.cover || "";
-    form.description = fm.description || "";
+    frontmatterYaml.value = p.frontMatterYaml || "";
   } finally {
     loading.value = false;
   }
@@ -93,11 +98,7 @@ async function save() {
       content: form.content,
       categories: form.categories,
       tags: form.tags,
-      frontMatter: {
-        date: form.date,
-        cover: form.cover,
-        description: form.description
-      },
+      frontMatterYaml: frontmatterYaml.value,
       status: form.status
     };
     if (id.value) {
@@ -117,6 +118,9 @@ function goBack() {
 }
 
 onMounted(async () => {
+  if (!id.value) {
+    frontmatterYaml.value = `date: ${nowDateTime()}\n`;
+  }
   await loadMeta();
   await load();
 });
@@ -198,42 +202,24 @@ onMounted(async () => {
           </el-col>
         </el-row>
 
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="发布日期">
-              <el-date-picker
-                v-model="form.date"
-                type="datetime"
-                placeholder="选择日期时间"
-                value-format="YYYY-MM-DD HH:mm:ss"
-                class="w-full"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="状态">
-              <el-radio-group v-model="form.status">
-                <el-radio value="draft">草稿</el-radio>
-                <el-radio value="published">发布</el-radio>
-              </el-radio-group>
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-form-item label="封面图">
-          <el-input
-            v-model="form.cover"
-            placeholder="封面图片 URL（可从图床复制）"
-          />
+        <el-form-item label="状态">
+          <el-radio-group v-model="form.status">
+            <el-radio value="draft">草稿</el-radio>
+            <el-radio value="published">发布</el-radio>
+          </el-radio-group>
         </el-form-item>
 
-        <el-form-item label="摘要">
+        <el-form-item label="Front-matter">
           <el-input
-            v-model="form.description"
+            v-model="frontmatterYaml"
             type="textarea"
-            :rows="2"
-            placeholder="文章摘要/描述（可选）"
+            :rows="6"
+            placeholder="YAML 格式，如 date / cover / description / comments 等"
+            class="font-mono"
           />
+          <div class="text-xs text-gray-400 mt-1">
+            Front-matter（YAML），会写入 .md 文件顶部；title / tags / categories 已由上方字段自动写入。
+          </div>
         </el-form-item>
 
         <el-form-item label="正文">

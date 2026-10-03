@@ -7,9 +7,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { GithubService } from '../../github/github.service';
 import {
   formatDateTime,
+  frontMatterToYaml,
   parseMarkdown,
   serializeMarkdown,
   slugify,
+  yamlToFrontMatter,
 } from '../../common/utils/markdown.util';
 import { SavePageDto } from './dto/pages.dto';
 
@@ -47,6 +49,17 @@ export class PagesService {
     const { title: _t, ...rest } = extra || {};
     const date = rest.date || existingDate || formatDateTime(new Date());
     return { ...rest, date };
+  }
+
+  /** 优先使用 frontMatterYaml（原始 YAML），否则用 frontMatter JSON。 */
+  private resolveFrontMatter(
+    dto: SavePageDto,
+    fallback?: Record<string, any>,
+  ): Record<string, any> | undefined {
+    if (dto.frontMatterYaml !== undefined) {
+      return yamlToFrontMatter(dto.frontMatterYaml);
+    }
+    return dto.frontMatter !== undefined ? dto.frontMatter : fallback;
   }
 
   private githubPathFor(slug: string, status: string) {
@@ -109,14 +122,17 @@ export class PagesService {
   async get(id: string) {
     const page = await this.prisma.page.findUnique({ where: { id } });
     if (!page) throw new NotFoundException('页面不存在');
-    return page;
+    return {
+      ...page,
+      frontMatterYaml: frontMatterToYaml(page.frontMatter as any),
+    };
   }
 
   async create(dto: SavePageDto) {
     if (!dto.title) throw new BadRequestException('标题不能为空');
     const slug = dto.slug || slugify(dto.title) || `page-${Date.now()}`;
     const status = dto.status === 'published' ? 'published' : 'draft';
-    const storedFm = this.buildStoredFrontMatter(dto.frontMatter);
+    const storedFm = this.buildStoredFrontMatter(this.resolveFrontMatter(dto));
     const fullFm = { ...storedFm, title: dto.title };
     const permalink = `/${slug}/`;
     const githubPath = this.githubPathFor(slug, status);
@@ -152,7 +168,7 @@ export class PagesService {
     const status = dto.status ?? page.status;
     const existingDate = (page.frontMatter as any)?.date;
     const storedFm = this.buildStoredFrontMatter(
-      dto.frontMatter !== undefined ? dto.frontMatter : (page.frontMatter as any),
+      this.resolveFrontMatter(dto, page.frontMatter as any),
       existingDate,
     );
     const fullFm = { ...storedFm, title };

@@ -35,6 +35,10 @@ export class SavePostDto {
   frontMatter?: Record<string, any>;
 
   @IsOptional()
+  @IsString()
+  frontMatterYaml?: string;
+
+  @IsOptional()
   @IsIn(['draft', 'published', 'discarded'])
   status?: string;
 }

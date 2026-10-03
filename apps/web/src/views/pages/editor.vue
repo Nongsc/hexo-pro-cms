@@ -15,11 +15,20 @@ const loading = ref(false);
 const form = reactive({
   title: "",
   slug: "",
-  date: "",
-  description: "",
   content: "",
   status: "published" as string
 });
+
+const frontmatterYaml = ref("");
+
+function nowDateTime() {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
+    `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+  );
+}
 
 async function load() {
   if (!id.value) return;
@@ -31,9 +40,7 @@ async function load() {
     form.slug = p.slug || "";
     form.content = p.content || "";
     form.status = p.status || "published";
-    const fm = p.frontMatter || {};
-    form.date = fm.date || "";
-    form.description = fm.description || "";
+    frontmatterYaml.value = p.frontMatterYaml || "";
   } finally {
     loading.value = false;
   }
@@ -61,7 +68,7 @@ async function save() {
       title: form.title,
       slug: form.slug,
       content: form.content,
-      frontMatter: { date: form.date, description: form.description },
+      frontMatterYaml: frontmatterYaml.value,
       status: form.status
     };
     if (id.value) {
@@ -80,7 +87,12 @@ function goBack() {
   router.push("/pages/index");
 }
 
-onMounted(load);
+onMounted(() => {
+  if (!id.value) {
+    frontmatterYaml.value = `date: ${nowDateTime()}\n`;
+  }
+  load();
+});
 </script>
 
 <template>
@@ -115,18 +127,8 @@ onMounted(load);
             </el-form-item>
           </el-col>
         </el-row>
+
         <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="日期">
-              <el-date-picker
-                v-model="form.date"
-                type="datetime"
-                placeholder="选择日期时间"
-                value-format="YYYY-MM-DD HH:mm:ss"
-                class="w-full"
-              />
-            </el-form-item>
-          </el-col>
           <el-col :span="12">
             <el-form-item label="状态">
               <el-radio-group v-model="form.status">
@@ -137,20 +139,24 @@ onMounted(load);
           </el-col>
         </el-row>
 
-        <el-form-item label="描述">
+        <el-form-item label="Front-matter">
           <el-input
-            v-model="form.description"
+            v-model="frontmatterYaml"
             type="textarea"
-            :rows="2"
-            placeholder="页面描述（可选）"
+            :rows="6"
+            placeholder="YAML 格式，如 date / description / cover 等"
+            class="font-mono"
           />
+          <div class="text-xs text-gray-400 mt-1">
+            Front-matter（YAML），会写入 .md 文件顶部；title 已由「标题」字段自动写入。
+          </div>
         </el-form-item>
 
         <el-form-item label="正文">
           <el-input
             v-model="form.content"
             type="textarea"
-            :rows="20"
+            :rows="18"
             placeholder="支持 Markdown 语法"
             class="font-mono"
           />

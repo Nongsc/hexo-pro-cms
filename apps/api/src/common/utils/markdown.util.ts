@@ -9,7 +9,7 @@ export interface ParsedMarkdown {
 export function parseMarkdown(raw: string): ParsedMarkdown {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(raw || '');
   if (!m) return { frontMatter: {}, content: raw || '' };
-  const loaded = yaml.load(m[1]);
+  const loaded = yaml.load(m[1], { schema: yaml.JSON_SCHEMA });
   const frontMatter =
     loaded && typeof loaded === 'object'
       ? (loaded as Record<string, any>)
@@ -28,6 +28,28 @@ export function serializeMarkdown(
   }
   const y = yaml.dump(clean, { lineWidth: -1, noRefs: true, sortKeys: false });
   return `---\n${y}---\n${content || ''}\n`;
+}
+
+/** Serialize a front-matter object to a YAML string (without `---`). */
+export function frontMatterToYaml(frontMatter: Record<string, any>): string {
+  const clean: Record<string, any> = {};
+  for (const [k, v] of Object.entries(frontMatter || {})) {
+    if (v !== undefined && v !== null && v !== '') clean[k] = v;
+  }
+  return yaml.dump(clean, { lineWidth: -1, noRefs: true, sortKeys: false });
+}
+
+/** Parse a YAML string into a front-matter object; returns {} on error. */
+export function yamlToFrontMatter(yamlStr: string): Record<string, any> {
+  if (!yamlStr || !yamlStr.trim()) return {};
+  try {
+    const loaded = yaml.load(yamlStr, { schema: yaml.JSON_SCHEMA });
+    return loaded && typeof loaded === 'object'
+      ? (loaded as Record<string, any>)
+      : {};
+  } catch {
+    return {};
+  }
 }
 
 /** URL-friendly slug, keeps CJK characters (Hexo supports them). */
