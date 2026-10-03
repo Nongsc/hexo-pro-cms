@@ -16,8 +16,9 @@ import { useUserStoreHook } from "@/store/modules/user";
 
 // 相关配置请参考：www.axios-js.com/zh-cn/docs/#axios-request-config-1
 const defaultConfig: AxiosRequestConfig = {
-  // 后端 API 前缀（本地由 vite 代理到 127.0.0.1:4300；线上用 VITE_API_BASE_URL 指定 API 域名）
-  baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
+  // 后端 API 前缀（本地由 vite 代理到 127.0.0.1:4300；线上用 VITE_API_BASE_URL 指定 API 域名，自动补 /api）
+  baseURL:
+    (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "") + "/api",
   // 请求超时时间
   timeout: 30000,
   headers: {
