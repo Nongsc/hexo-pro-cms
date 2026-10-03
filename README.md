@@ -3,7 +3,7 @@
 复刻 [hexo-pro](https://github.com/heywarms/hexo-pro) 功能的**独立博客管理后台（CMS）**，与 Hexo 运行时、桌面端彻底解耦，部署为 Vercel 上的纯 Web 应用。
 
 - 基于 [pure-admin](https://github.com/pure-admin/vue-pure-admin)（Vue 3 + Vite + Element Plus + TypeScript）重建 UI
-- 后端采用 **NestJS**（TypeScript 原生 MVC）+ **Prisma** + **PostgreSQL**
+- 后端采用 **NestJS 12（ESM）**（TypeScript 原生 MVC）+ **Prisma** + **PostgreSQL**
 - 通过 **GitHub API** 读写博客内容与配置（不再直接操作本地文件）
 - 使用**腾讯云 COS** 作为图床（配置在系统管理中维护）
 
@@ -74,7 +74,7 @@ hexo-pro-cms/
 
 ## 本地开发
 
-前置：Node.js ≥ 20、pnpm ≥ 9。
+前置：Node.js ≥ 22（NestJS 12 为 ESM 模块，需 Node 22+）、pnpm ≥ 9。
 
 ```bash
 pnpm install
@@ -97,18 +97,24 @@ pnpm dev:web
 
 首次打开前端会自动进入「初始化设置」：注册管理员账号，或「跳过设置」使用临时账号；随后在「系统设置」中配置 GitHub 连接与 COS。
 
-## 环境变量（apps/api/.env）
+## 环境变量
+
+**后端（apps/api/.env）**
 
 | 变量 | 说明 |
 |---|---|
 | `DATABASE_URL` | PostgreSQL 连接串（必填） |
 | `JWT_SECRET` | JWT 签名密钥（必填，随机长字符串） |
 | `PORT` | 本地监听端口，默认 4300 |
-| `WEB_ORIGIN` | 前端来源（CORS） |
 | `GITHUB_TOKEN` / `GITHUB_OWNER` / `GITHUB_REPO` / `GITHUB_BRANCH` | GitHub 连接的可选默认值（也可在系统设置中配置） |
-| `COS_SECRET_ID` / `COS_SECRET_KEY` / `COS_BUCKET` / `COS_REGION` / `COS_CUSTOM_DOMAIN` | COS 可选默认值（也可在系统设置中配置） |
 
-> GitHub Token 需要 `repo`（Contents 读写）与 `workflow`（触发 Actions）权限。COS/图床配置亦可在「系统设置 → 腾讯云 COS」中维护，会加密展示并持久化到 PostgreSQL。
+**前端（apps/web/.env.production）**
+
+| 变量 | 说明 |
+|---|---|
+| `VITE_API_BASE_URL` | 后端 API 域名（如 `https://xxx.vercel.app`），**不含 `/api`**，前端自动补全 |
+
+> GitHub Token 需要 `repo`（Contents 读写）与 `workflow`（触发 Actions）权限。COS/图床配置在「系统设置 → 腾讯云 COS」中维护（存 PostgreSQL，**无需环境变量**）。
 
 ## GitHub 目标仓库约定
 
@@ -123,21 +129,28 @@ CMS 连接的 Hexo 源仓库按标准 Hexo 目录结构读写：
 
 ## 部署到 Vercel
 
-建议拆成两个 Vercel 项目：
+> 📖 **完整的新手部署教程见 [docs/deploy-vercel.md](docs/deploy-vercel.md)**，下面只是概要。
 
-**1. 前端（apps/web，静态站点）**
+建议拆成两个 Vercel 项目（前端静态站点 + 后端 Serverless Function）：
 
-- Framework Preset: `Vite`，Root Directory: `apps/web`
-- Build Command 已在 `apps/web/vercel.json` 配置，输出目录 `dist`
-
-**2. 后端（apps/api，Serverless Functions）**
+**1. 后端（apps/api）**
 
 - Root Directory: `apps/api`
-- Build Command 使用 `vercel-build`（`prisma generate && prisma migrate deploy && nest build`）
-- 环境变量：`DATABASE_URL`、`JWT_SECRET`、`WEB_ORIGIN`（设为前端域名）等
-- `api/index.js` 作为 catch-all 处理 `/api/*`（见 `apps/api/vercel.json`）
+- Node.js Version: **`22.x`**（⚠️ 关键：NestJS 12 是 ESM，Node 20 会报 `ERR_REQUIRE_ESM`）
+- Framework Preset: `Other`
+- Build Command: `pnpm run vercel-build`（= `prisma generate && nest build`，**不跑迁移**）
+- Output Directory: 留空（`apps/api/public` 仅作占位）
+- 环境变量：`DATABASE_URL`（Neon **直连串**，非池化）、`JWT_SECRET`、`GITHUB_TOKEN`、`GITHUB_OWNER`、`GITHUB_REPO`、`GITHUB_BRANCH`
 
-> 提示：PostgreSQL 推荐使用 Neon / Vercel Postgres 的 serverless 连接池（含 `?pgbouncer=true` 或 `?sslmode=require`），以适配 serverless 冷启动下的连接数限制。
+**2. 前端（apps/web）**
+
+- Root Directory: `apps/web`
+- Framework Preset: `Vite`
+- 环境变量：`VITE_API_BASE_URL`（后端 API 域名，**不含 `/api`**，前端会自动补）
+
+> 关键约定：数据库迁移在**本地**执行（`pnpm prisma:deploy`），Vercel 构建不连数据库；`apps/api/vercel.json` 通过 `includeFiles` 把 `dist/` 编译产物打进函数包；前端 `VITE_API_BASE_URL` 只填域名即可。
+
+> 提示：PostgreSQL 推荐使用 Neon 的 serverless 直连串（`?sslmode=require`）；池化串（`-pooler` + `channel_binding=require`）在 Vercel 构建/运行时可能连不上。
 
 ## API 概览（前缀 `/api`）
 
@@ -145,7 +158,7 @@ CMS 连接的 Hexo 源仓库按标准 Hexo 目录结构读写：
 - 文章：`GET/POST /posts`、`GET/PUT/DELETE /posts/:id`、`POST /posts/:id/publish|unpublish`、`/posts/categories`、`/posts/tags`、`POST /posts/search`、`POST /posts/sync`
 - 页面：`GET/POST /pages`、`GET/PUT/DELETE /pages/:id`、`POST /pages/sync`
 - 图床：`GET/PUT /images/config`、`GET /images`、`POST /images/upload`、`DELETE /images/:id`、`POST /images/delete/batch`、`/images/move`、`/images/:id/rename`、`/images/unused`
-- 配置：`GET /configs/files`、`GET/PUT /configs/file`、`GET /configs/snapshots`、`POST /configs/rollback`
+- 配置：`GET /configs/files`、`GET /configs/file`、`POST /configs/file/draft`（存草稿）、`POST /configs/file/publish`（发布）、`DELETE /configs/file/draft`（丢弃）、`GET /configs/snapshots`、`POST /configs/rollback`
 - 主题：`GET /theme/installed`、`GET /theme/current`、`POST /theme/switch`、`POST /theme/install`（git 克隆，GitHub Actions 执行）、`POST /theme/install-npm`（npm 安装）、`GET /theme/install/status/:runId`、`DELETE /theme/:name`（卸载并删除配置文件/草稿/快照）、`GET /theme/plugins` + `POST /theme/plugins` + `DELETE /theme/plugins/:name`、`GET /theme/config` + `POST /theme/config/draft` + `POST /theme/config/publish` + `DELETE /theme/config/draft`
 - 部署：`GET/PUT /deploy/config`、`POST /deploy/execute`、`GET /deploy/status`
 - 仪表盘：`/dashboard/stats`、`/dashboard/recent`、`/dashboard/system`、`/dashboard/todos*`
