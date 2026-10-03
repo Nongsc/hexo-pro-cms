@@ -166,3 +166,9 @@ CMS 连接的 Hexo 源仓库按标准 Hexo 目录结构读写：
 - 设置：`GET/PUT /settings/{system,github,cos,deploy}`、`PUT /users/profile`、`POST /users/avatar`
 
 统一响应格式：成功 `{ code: 0, data, msg: "ok" }`；失败 `{ code: <状态码>, msg, data: null }`。
+
+## 开源协议
+
+本项目基于 [MIT 协议](LICENSE) 开源，可自由使用、修改、分发，保留版权声明即可。
+
+> 注意：项目基于 [pure-admin](https://github.com/pure-admin/vue-pure-admin) 与 [NestJS](https://nestjs.com/) 等开源框架构建，它们各自遵守其自身的开源协议。

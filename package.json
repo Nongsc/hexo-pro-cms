@@ -2,6 +2,7 @@
   "name": "hexo-pro-cms",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Independent CMS for Hexo blogs — NestJS + Prisma(PostgreSQL) + pure-admin(Vue3), GitHub API + Tencent COS",
   "packageManager": "pnpm@11.7.0",
   "engines": {
