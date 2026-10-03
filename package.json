@@ -5,7 +5,7 @@
   "description": "Independent CMS for Hexo blogs — NestJS + Prisma(PostgreSQL) + pure-admin(Vue3), GitHub API + Tencent COS",
   "packageManager": "pnpm@11.7.0",
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   },
   "scripts": {
     "dev:web": "pnpm --filter @hexo-pro-cms/web dev",
