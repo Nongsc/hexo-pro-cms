@@ -3,8 +3,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
-import { GithubService } from '../../github/github.service';
+import { PrismaService } from '../../prisma/prisma.service.js';
+import { GithubService } from '../../github/github.service.js';
 
 @Injectable()
 export class ConfigsService {

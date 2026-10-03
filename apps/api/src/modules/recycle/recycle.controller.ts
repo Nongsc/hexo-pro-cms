@@ -1,5 +1,5 @@
 import { Controller, Delete, Get, Param, Post } from '@nestjs/common';
-import { RecycleService } from './recycle.service';
+import { RecycleService } from './recycle.service.js';
 
 @Controller('recycle')
 export class RecycleController {

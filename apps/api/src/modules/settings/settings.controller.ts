@@ -1,11 +1,11 @@
 import { Body, Controller, Get, Put } from '@nestjs/common';
-import { SettingsService } from './settings.service';
+import { SettingsService } from './settings.service.js';
 import {
   UpdateCosConfigDto,
   UpdateDeployConfigDto,
   UpdateGithubConfigDto,
   UpdateSystemConfigDto,
-} from './dto/settings.dto';
+} from './dto/settings.dto.js';
 
 @Controller('settings')
 export class SettingsController {

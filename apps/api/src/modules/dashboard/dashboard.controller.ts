@@ -7,8 +7,8 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { DashboardService } from './dashboard.service';
-import { AddTodoDto } from './dto/dashboard.dto';
+import { DashboardService } from './dashboard.service.js';
+import { AddTodoDto } from './dto/dashboard.dto.js';
 
 @Controller('dashboard')
 export class DashboardController {

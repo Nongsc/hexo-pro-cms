@@ -8,7 +8,7 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
-import { ImagesService } from './images.service';
+import { ImagesService } from './images.service.js';
 import {
   ConfirmDto,
   DeleteBatchDto,
@@ -17,7 +17,7 @@ import {
   RenameImageDto,
   SaveStorageConfigDto,
   UploadImageDto,
-} from './dto/images.dto';
+} from './dto/images.dto.js';
 
 @Controller('images')
 export class ImagesController {

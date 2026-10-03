@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../../prisma/prisma.service.js';
 import {
   CosConfig,
   DeployConfig,
   GithubConfig,
   SystemConfig,
-} from '../../config/types';
+} from '../../config/types.js';
 
 @Injectable()
 export class SettingsService {

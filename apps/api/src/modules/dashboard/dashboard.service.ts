@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
-import { SettingsService } from '../settings/settings.service';
-import { AddTodoDto } from './dto/dashboard.dto';
+import { PrismaService } from '../../prisma/prisma.service.js';
+import { SettingsService } from '../settings/settings.service.js';
+import { AddTodoDto } from './dto/dashboard.dto.js';
 
 @Injectable()
 export class DashboardService {

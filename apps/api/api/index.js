@@ -1,17 +1,11 @@
-// Vercel serverless 入口：把 NestJS (Express) 应用作为单个函数暴露。
+// Vercel serverless 入口：把 NestJS (Express) 应用作为单个函数暴露（ESM）。
 // 前置条件：`nest build` 已产出 ./dist（vercel-build 脚本会执行）。
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { NestFactory } = require('@nestjs/core');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { ValidationPipe } = require('@nestjs/common');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { AppModule } = require('../dist/app.module');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { HttpExceptionFilter } = require('../dist/common/filters/http-exception.filter');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { TransformInterceptor } = require('../dist/common/interceptors/transform.interceptor');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { json, urlencoded } = require('express');
+import { NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
+import { AppModule } from '../dist/app.module.js';
+import { HttpExceptionFilter } from '../dist/common/filters/http-exception.filter.js';
+import { TransformInterceptor } from '../dist/common/interceptors/transform.interceptor.js';
+import { json, urlencoded } from 'express';
 
 let cachedApp = null;
 
@@ -38,7 +32,7 @@ async function bootstrap() {
   return app;
 }
 
-module.exports = async (req, res) => {
+export default async (req, res) => {
   const app = cachedApp || (cachedApp = await bootstrap());
   const instance = app.getHttpAdapter().getInstance();
   return instance(req, res);

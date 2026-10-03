@@ -4,16 +4,16 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { PrismaService } from '../../prisma/prisma.service';
-import { CosService } from '../../cos/cos.service';
-import { SettingsService } from '../settings/settings.service';
+import { PrismaService } from '../../prisma/prisma.service.js';
+import { CosService } from '../../cos/cos.service.js';
+import { SettingsService } from '../settings/settings.service.js';
 import {
   ConfirmDto,
   MoveImageDto,
   PresignDto,
   RenameImageDto,
   UploadImageDto,
-} from './dto/images.dto';
+} from './dto/images.dto.js';
 
 function mimeToExt(mime: string): string {
   const map: Record<string, string> = {

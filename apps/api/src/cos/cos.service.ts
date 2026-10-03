@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { SettingsService } from '../modules/settings/settings.service';
-import { CosConfig } from '../config/types';
-import COS = require('cos-nodejs-sdk-v5');
+import { SettingsService } from '../modules/settings/settings.service.js';
+import { CosConfig } from '../config/types.js';
+import COS from 'cos-nodejs-sdk-v5';
 
 export interface CosObjectList {
   Contents?: any[];

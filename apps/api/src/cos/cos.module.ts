@@ -1,5 +1,5 @@
 import { Global, Module } from '@nestjs/common';
-import { CosService } from './cos.service';
+import { CosService } from './cos.service.js';
 
 @Global()
 @Module({

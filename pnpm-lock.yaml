@@ -40,6 +40,9 @@ importers:
       cos-nodejs-sdk-v5:
         specifier: ^3.0.0
         version: 3.0.0
+      express:
+        specifier: ^5.2.1
+        version: 5.2.1
       gray-matter:
         specifier: ^4.0.3
         version: 4.0.3

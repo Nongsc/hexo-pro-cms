@@ -3,9 +3,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
-import { GithubService } from '../../github/github.service';
-import { serializeMarkdown, slugify } from '../../common/utils/markdown.util';
+import { PrismaService } from '../../prisma/prisma.service.js';
+import { GithubService } from '../../github/github.service.js';
+import { serializeMarkdown, slugify } from '../../common/utils/markdown.util.js';
 
 @Injectable()
 export class RecycleService {

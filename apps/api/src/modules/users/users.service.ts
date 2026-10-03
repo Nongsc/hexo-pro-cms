@@ -4,9 +4,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
-import { PrismaService } from '../../prisma/prisma.service';
-import { CosService } from '../../cos/cos.service';
-import { UpdateProfileDto } from './dto/users.dto';
+import { PrismaService } from '../../prisma/prisma.service.js';
+import { CosService } from '../../cos/cos.service.js';
+import { UpdateProfileDto } from './dto/users.dto.js';
 
 function mimeToExt(mime: string): string {
   const map: Record<string, string> = {

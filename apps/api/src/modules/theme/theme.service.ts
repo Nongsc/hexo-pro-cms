@@ -3,14 +3,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
-import { GithubService } from '../../github/github.service';
-import { SettingsService } from '../settings/settings.service';
+import { PrismaService } from '../../prisma/prisma.service.js';
+import { GithubService } from '../../github/github.service.js';
+import { SettingsService } from '../settings/settings.service.js';
 import {
   AddPluginsDto,
   InstallNpmThemeDto,
   InstallThemeDto,
-} from './dto/theme.dto';
+} from './dto/theme.dto.js';
 
 const WORKFLOW_PATH = '.github/workflows/install-theme.yml';
 

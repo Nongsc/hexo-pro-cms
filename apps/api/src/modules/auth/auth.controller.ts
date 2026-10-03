@@ -5,17 +5,17 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { Public } from '../../common/decorators/public.decorator';
+import { Public } from '../../common/decorators/public.decorator.js';
 import {
   CurrentUser,
   JwtUser,
-} from '../../common/decorators/current-user.decorator';
-import { AuthService } from './auth.service';
+} from '../../common/decorators/current-user.decorator.js';
+import { AuthService } from './auth.service.js';
 import {
   LoginDto,
   RegisterDto,
   ResetPasswordDto,
-} from './dto/auth.dto';
+} from './dto/auth.dto.js';
 
 @Controller('auth')
 export class AuthController {

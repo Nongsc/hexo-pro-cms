@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { RecycleController } from './recycle.controller';
-import { RecycleService } from './recycle.service';
+import { RecycleController } from './recycle.controller.js';
+import { RecycleService } from './recycle.service.js';
 
 @Module({
   controllers: [RecycleController],

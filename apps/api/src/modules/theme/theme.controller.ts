@@ -7,14 +7,14 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ThemeService } from './theme.service';
+import { ThemeService } from './theme.service.js';
 import {
   AddPluginsDto,
   InstallNpmThemeDto,
   InstallThemeDto,
   SaveThemeConfigDto,
   SwitchThemeDto,
-} from './dto/theme.dto';
+} from './dto/theme.dto.js';
 
 @Controller('theme')
 export class ThemeController {

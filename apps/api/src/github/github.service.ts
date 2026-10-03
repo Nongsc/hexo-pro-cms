@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { SettingsService } from '../modules/settings/settings.service';
-import { GithubConfig } from '../config/types';
+import { SettingsService } from '../modules/settings/settings.service.js';
+import { GithubConfig } from '../config/types.js';
 
 function encodePath(path: string): string {
   return path.split('/').map((s) => encodeURIComponent(s)).join('/');

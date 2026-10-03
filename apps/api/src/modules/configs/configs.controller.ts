@@ -6,8 +6,8 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ConfigsService } from './configs.service';
-import { PathDto, RollbackDto, SaveConfigDto } from './dto/configs.dto';
+import { ConfigsService } from './configs.service.js';
+import { PathDto, RollbackDto, SaveConfigDto } from './dto/configs.dto.js';
 
 @Controller('configs')
 export class ConfigsController {

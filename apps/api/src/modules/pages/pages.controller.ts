@@ -8,8 +8,8 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
-import { PagesService } from './pages.service';
-import { SavePageDto } from './dto/pages.dto';
+import { PagesService } from './pages.service.js';
+import { SavePageDto } from './dto/pages.dto.js';
 
 @Controller('pages')
 export class PagesController {

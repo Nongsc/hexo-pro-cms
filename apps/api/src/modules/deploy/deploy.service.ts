@@ -1,8 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
-import { GithubService } from '../../github/github.service';
-import { SettingsService } from '../settings/settings.service';
-import { SaveDeployDto } from './dto/deploy.dto';
+import { PrismaService } from '../../prisma/prisma.service.js';
+import { GithubService } from '../../github/github.service.js';
+import { SettingsService } from '../settings/settings.service.js';
+import { SaveDeployDto } from './dto/deploy.dto.js';
 
 @Injectable()
 export class DeployService {

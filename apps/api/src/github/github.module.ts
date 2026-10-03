@@ -1,5 +1,5 @@
 import { Global, Module } from '@nestjs/common';
-import { GithubService } from './github.service';
+import { GithubService } from './github.service.js';
 
 @Global()
 @Module({

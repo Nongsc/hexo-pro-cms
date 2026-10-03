@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Post, Put } from '@nestjs/common';
-import { DeployService } from './deploy.service';
-import { SaveDeployDto } from './dto/deploy.dto';
+import { DeployService } from './deploy.service.js';
+import { SaveDeployDto } from './dto/deploy.dto.js';
 
 @Controller('deploy')
 export class DeployController {

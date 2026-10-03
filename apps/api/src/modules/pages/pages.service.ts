@@ -3,8 +3,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
-import { GithubService } from '../../github/github.service';
+import { PrismaService } from '../../prisma/prisma.service.js';
+import { GithubService } from '../../github/github.service.js';
 import {
   formatDateTime,
   frontMatterToYaml,
@@ -12,8 +12,8 @@ import {
   serializeMarkdown,
   slugify,
   yamlToFrontMatter,
-} from '../../common/utils/markdown.util';
-import { SavePageDto } from './dto/pages.dto';
+} from '../../common/utils/markdown.util.js';
+import { SavePageDto } from './dto/pages.dto.js';
 
 interface ListQuery {
   status?: string;
