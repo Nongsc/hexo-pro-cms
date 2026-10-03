@@ -8,6 +8,7 @@ export default {
   meta: {
     icon: "ep/upload",
     title: "部署",
+    showLink: false,
     rank: 5
   },
   children: [
